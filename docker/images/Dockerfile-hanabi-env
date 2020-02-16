@@ -1,0 +1,7 @@
+FROM alpine/git as hanabi-fetch
+
+RUN git clone https://github.com/deepmind/hanabi-learning-environment.git /hanabi-learning-environment
+
+FROM python:3.8-buster as hanabi-env
+COPY --from=hanabi-fetch /hanabi-learning-environment /hanabi_env
+RUN cd /hanabi_env && pip install .
