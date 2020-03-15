@@ -5,5 +5,5 @@
 # FROM python:3.8-buster
 # COPY --from=hanabi-fetch /hanabi-learning-environment /hanabi_env
 # RUN ls -lah / && cd /hanabi_env && pip install .
-FROM hanabi-env:latest
+FROM hanabi-env:cpu
 RUN pip install tensorflow==1.15.2

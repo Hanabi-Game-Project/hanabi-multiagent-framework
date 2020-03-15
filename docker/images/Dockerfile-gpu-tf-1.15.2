@@ -1,0 +1,15 @@
+FROM alpine/git as hanabi-fetch
+
+RUN git clone https://github.com/deepmind/hanabi-learning-environment.git /hanabi-learning-environment
+git clone https://github.com/deepmind/dm-env /dm-env
+git clone https://github.com/deepmind/dm-haiku /dm-haiku
+git clone https://github.com/deepmind/rlax.git /rlax
+
+FROM tensorflow/tensorflow:1.15.2-gpu-py3
+COPY --from=hanabi-fetch /hanabi-learning-environment /dm-env /dm-haiku /rlax /dm-tools
+# RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python3 get-pip.py
+RUN pip install --upgrade pip && cd /dm-tools && \
+    cd hanabi-learning-environment && pip install . && cd .. && \
+    cd dm-env && pip install . && cd .. && \
+    cd dm-haiku && pip install . && cd .. && \
+    cd rlax && pip install . && cd ..
