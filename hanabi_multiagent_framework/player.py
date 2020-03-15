@@ -2,36 +2,70 @@
 This file defines an abstract class for hanabi agents.
 All agents which shall be managed by the HanabiGameManager, have to comply with this interface.
 """
+import numpy as np
 
-from hanabi_learning_environment.rl_env import Agent
+class HanabiPlayer:
+    """
+    HanabiPlayer is a wrapper class for the Hanabi game. Its main objective is to accumulate
+    the training samples while multiple parallel games are being executed.
+    """
+    def __init__(self, pipe, agent_config, n_players, n_moves):
+        """Constructor
+        Args:
+            agent                      -- an agent.
+            n_players            (int) -- number of players in the game.
+            observe_whole_round (bool) -- whether only one last observation, or all observations
+                                          collected in the last round should be fed into the agent.
+        """
+        self._pipe = pipe
+        self.n_moves = n_moves
+        self.n_players = n_players
+        self.observe_round = agent_config["consumes_round_observations"]
+        self.current_observations = []
+        self.legal_moves_template = np.full((self.n_moves,), -np.inf)
 
-class HanabiAgent(Agent):
-    """
-    Abstract class from which all agents participating in game of hanabi should inherit.
-    A notable difference to "traditional" agents is that consuming an observation and producing
-    an action have to be split in this agent implementation, because the agent observes
-    the game more frequently, than it makes a move.
-    """
-    def act(self, legal_actions):
+    def act(self, legal_moves):
         """Produce an action. This function is called when it's agent's turn to make a move,
         i.e. once per round.
-        The agent is supposed to take care of observations internally.
-        See also self.consume_observation(observation).
+
+        The agent is required to have the "act" method which consumes observation(s) and produces
+        a list with probabilities of all actions. These probabilities are then filtered by selecting
+        the most probable of only legal actions. The agent should still be able to explore by
+        manipulating the action probabilities.
 
         Args:
             legal_moves (list) -- list with indices of the legal moves.
         Returns (int) a legal action.
         """
-        raise NotImplementedError("When implementing HanabiAgent interface, "
-                                  "make sure to implement <act> function.")
+        legal_moves_np = np.full((self.n_moves,), -np.inf)
+        legal_moves_np[legal_moves] = 0.0
+        if self.observe_round:
+            self._pipe.send((self.current_observations[-self.n_players:], legal_moves_np))
+        else:
+            #  print(getsizeof(self.current_observations[-1][0]))
+            self._pipe.send((self.current_observations[-1], legal_moves_np))
+        self.current_observations.clear()
+        action = self._pipe.recv()
+        #  illegal_moves = [move_id for move_id in range(len(actions)) if move_id not in legal_moves]
+        #  actions = actions[legal_moves]
+        #  actions[illegal_moves] = -1
+        return action
 
     def consume_observation(self, observation, reward):
-        """Receive an observation and accociated reward and handle it
-        according to agent's internals.
+        """Receives an observation and accociated reward and stores it in the training_data member
+        variable. After the game(s) training_data can/should be collected for further usage.
+
+        When an agent is requested to act, it receives the last observation(s) stored in the
+        training_data.
 
         Args:
             observation -- a vectorized observation which uses one-hot encoding.
             reward      -- a reward.
         """
+        self.current_observations.append((observation, reward))
+
+    def train_agent(self):
+        """Train the agent.
+        """
         raise NotImplementedError("When implementing HanabiAgent interface, "
-                                  "make sure to implement <consume_observation> function.")
+                                  "make sure to implement <train_agent> function.")
