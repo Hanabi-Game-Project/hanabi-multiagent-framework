@@ -10,7 +10,8 @@ def canonical_obsevation_substitute_colors(vectorized_observation, substitution_
     raise NotImplementedError()
 
 
-def make_hanabi_env_config(environment_name="Hanabi-Full", num_players=2):
+def make_hanabi_env_config(
+        environment_name="Hanabi-Full", num_players=2):
     """Generate a configuration dictionary for hanabi environment.
 
     Args:
@@ -21,8 +22,10 @@ def make_hanabi_env_config(environment_name="Hanabi-Full", num_players=2):
                                      ranks, 8 info tokens, 3 life tokens and minimal card knowledge.
                                    - 'Hanabi-Small': use 2 colors, 5
                                      ranks, 3 info tokens, 1 life token and default card knowledge.
-                                   - 'Hanabi-Small': use 1 colors, 5
+                                   - 'Hanabi-Very-Small': use 1 colors, 5
                                      ranks, 3 info tokens, 1 life token and default card knowledge.
+                                   - 'Hanabi-Very-Small-Oracle': use 1 colors, 5
+                                     ranks, 3 info tokens, 1 life token and can see all cards.
         num_players (int) -- number of players.
     """
     if environment_name in ["Hanabi-Full", "Hanabi-Full-CardKnowledge"]:
@@ -82,6 +85,23 @@ def make_hanabi_env_config(environment_name="Hanabi-Full", num_players=2):
                 1,
             "observation_type":
                 pyhanabi.AgentObservationType.CARD_KNOWLEDGE.value
+        }
+    elif environment_name == "Hanabi-Very-Small-Oracle":
+        config = {
+            "colors":
+                1,
+            "ranks":
+                5,
+            "players":
+                num_players,
+            "hand_size":
+                2,
+            "max_information_tokens":
+                3,
+            "max_life_tokens":
+                1,
+            "observation_type":
+                pyhanabi.AgentObservationType.SEER.value
         }
     else:
         raise ValueError("Unknown environment {}".format(environment_name))

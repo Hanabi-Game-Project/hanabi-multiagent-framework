@@ -9,68 +9,48 @@ import dm_env
 from dm_env import specs
 import numpy as np
 
-class HanabiEnvironment(rl_env.HanabiEnv):
+class HanabiParallelEnvironment:
     """Hanabi environment wrapper for use with HanabiGameManager.
     """
-    #  def __init__(self, env_config):
-    #      super(HanabiEnvironment, self).__init__(env_config)
+    def __init__(self, env_config: dict, n_parallel: int):
+        self._parallel_env = pyhanabi.HanabiParallelEnv(env_config, n_parallel, True)
 
-    def step(self, action_id):
-        """Take one step in the game
-        Overrides the step() method from rl_env.HanabiEnv.
-        Breaking changes:
-          -- Observations contain only vectorized representations.
-          -- Action has to be an integer (i.e. action_id).
+    def step(self, action_ids: list, agent_id: int) -> tuple:
+        """Take one step in all game states.
+        Args:
+            action_ids -- list with ids of the actions for each state.
+            agent_id -- id of the agent taking the actions.
+        Return:
+            a tuple consisting of:
+              - observation tuple (vectorized observation, legal moves)
+              - reward array
+              - done (always False)
+              - info (always None)
         """
 
-        # fetch a move corresponding to action id.
-        action = self.game.get_move(action_id)
-        last_score = self.state.score()
+        last_score = self._parallel_env.last_observation.rewards.copy()
         # Apply the action to the state.
-        self.state.apply_move(action)
+        self._parallel_env.apply_batch_move(action_ids, agent_id)
 
-        while self.state.cur_player() == pyhanabi.CHANCE_PLAYER_ID:
-            self.state.deal_random_card()
-
-        observation = self._make_observation_all_players()
         #  done = self.state.is_terminal()
         # Reward is score differential. May be large and negative at game end.
-        reward = self.state.score() - last_score
+        reward = self._parallel_env.last_observation.rewards - last_score
         #  info = {}
 
-        return observation, reward, self.state.is_terminal()
+        return ((self._parallel_env.last_observation.batch_observation.copy(),
+                 self._parallel_env.last_observation.legal_moves.copy()),
+                reward.copy(),
+                False, # the enviroment resets automatically.
+                None) # no additional info
 
-    def _make_observation_all_players(self):
-        """Make observation for all players.
-        Returns:
-        dict, containing observations for all players.
-        """
-        #  obs = {}
-        player_observations = [self.state.observation(pid) for pid in range(self.players)]
-        #  obs["player_observations"] = player_observations
-        #  obs["current_player"] = self.state.cur_player()
-        return player_observations
-
-    def encode_observation(self, observation):
-        """Encode an observation.
-
-        Args:
-            observation (pyhanabi.Observation) -- an observation to encode.
-
-        Returns and encoded observation.
-        """
-        return self.observation_encoder.encode(observation)
-
-    def reset(self):
+    def reset(self) -> tuple:
         """Resets the environment for a new game.
         Returns:
-            observation: vectorized observation
+            observation: (vectorized observation, legal moves)
         """
-        self.state = self.game.new_initial_state()
-        while self.state.cur_player() == pyhanabi.CHANCE_PLAYER_ID:
-            self.state.deal_random_card()
-        return self._make_observation_all_players()
-
+        self._parallel_env.new_initial_observation()
+        return (self._parallel_env.last_observation.batch_observation.copy(),
+                self._parallel_env.last_observation.legal_moves.copy())
 
 class HanabiDMEnv(dm_env.Environment):
     """Hanabi environment wrapper for use with HanabiGameManager.
