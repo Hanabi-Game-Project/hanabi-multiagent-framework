@@ -33,15 +33,16 @@ RUN /bin/bash /dm-tools/miniconda.sh -b -p /opt/conda && \
     find /opt/conda/ -follow -type f -name '*.a' -delete && \
     find /opt/conda/ -follow -type f -name '*.js.map' -delete && \
     /opt/conda/bin/conda clean -afy && \
-    pip install --upgrade pip
+    pip install --upgrade pip && \
+    sh install_jax.sh
 
-RUN which python && which pip && python --version && pip --version
+# RUN which python && which pip && python --version && pip --version
 
 RUN cd /dm-tools && ls -lah && \
     cd hanabi-learning-environment && pip install . && cd .. && \
     cd dm-env                      && pip install . && cd .. && \
     cd dm-haiku                    && pip install . && cd .. && \
-    cd rlax                        && pip3 install . && cd ..
+    cd rlax                        && pip install . && cd ..
 
 RUN rm -rf /dm-tools
 
