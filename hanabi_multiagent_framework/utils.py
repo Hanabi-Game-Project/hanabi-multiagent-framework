@@ -43,6 +43,21 @@ def make_hanabi_env_config(
             "observation_type":
                 pyhanabi.AgentObservationType.CARD_KNOWLEDGE.value
         }
+    if environment_name == "Hanabi-Full-Oracle":
+        config = {
+            "colors":
+                5,
+            "ranks":
+                5,
+            "players":
+                num_players,
+            "max_information_tokens":
+                8,
+            "max_life_tokens":
+                3,
+            "observation_type":
+                pyhanabi.AgentObservationType.CARD_KNOWLEDGE.value
+        }
     elif environment_name == "Hanabi-Full-Minimal":
         config = {
             "colors": 5,
@@ -68,6 +83,23 @@ def make_hanabi_env_config(
                 1,
             "observation_type":
                 pyhanabi.AgentObservationType.CARD_KNOWLEDGE.value
+        }
+    elif environment_name == "Hanabi-Small-Oracle":
+        config = {
+            "colors":
+                2,
+            "ranks":
+                5,
+            "players":
+                num_players,
+            "hand_size":
+                2,
+            "max_information_tokens":
+                3,
+            "max_life_tokens":
+                1,
+            "observation_type":
+                pyhanabi.AgentObservationType.SEER.value
         }
     elif environment_name == "Hanabi-Very-Small":
         config = {
