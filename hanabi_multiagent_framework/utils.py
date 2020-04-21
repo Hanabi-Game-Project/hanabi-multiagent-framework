@@ -318,3 +318,45 @@ class ObservationCanonicalDecoder:
     def _decode_card_knowledge(self, obs, offset):
         card_knowledge = {}
         return offset, card_knowledge
+
+
+def eval_pretty_print(step_rewards, total_reward):
+    steps_descr      = "| Step       |"
+    terminated_descr = "| Terminated |"
+    means_descr      = "| Mean Rew   |"
+    stds_descr       = "| Std Rew    |"
+    mins_descr       = "| Min Rew    |"
+    maxs_descr       = "| Max Rew    |"
+
+    n_steps = len(step_rewards)
+    n_rows = n_steps // 12
+    if n_steps - n_rows * 12 > 0:
+        n_rows += 1
+
+    steps = ["" for _ in range(n_rows)]
+    terminated = ["" for _ in range(n_rows)]
+    means = ["" for _ in range(n_rows)]
+    stds = ["" for _ in range(n_rows)]
+    mins = ["" for _ in range(n_rows)]
+    maxs = ["" for _ in range(n_rows)]
+
+    for i, step in enumerate(step_rewards):
+        row = i // 12
+        steps[row]      += f" {i+1:6} |"
+        terminated[row] += f" {step['terminated']:6} |"
+        means[row]      += f" {step['rewards'].mean():6.3f} |"
+        stds[row]       += f" {step['rewards'].std():6.3f} |"
+        mins[row]       += f" {int(step['rewards'].min()):6} |"
+        maxs[row]       += f" {int(step['rewards'].max()):6} |"
+    border = '-' * (len(steps[0]) + len(steps_descr))
+    for st, te, me, sd, mi, ma in zip(steps, terminated, means, stds, mins, maxs):
+        print(border)
+        print(steps_descr + st)
+        print(terminated_descr + te)
+        print(means_descr + me)
+        print(stds_descr + sd)
+        print(mins_descr + mi)
+        print(maxs_descr + ma)
+        print(border)
+    print(f"Total: {total_reward.mean():.3f} {total_reward.std():.3f} {int(total_reward.min()):2} {int(total_reward.max()):2}")
+    print('')
