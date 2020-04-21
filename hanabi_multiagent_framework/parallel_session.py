@@ -21,63 +21,6 @@ class AgentRingQueue:
     def __len__(self) -> int:
         return self._len
 
-class ExperienceBuffer:
-    """ExperienceBuffer stores transitions in form for training"""
-
-    def __init__(self, observation_len: int, action_len: int, reward_len: int, size: int):
-        self._obs_buf = np.empty((size, observation_len))
-        self._lms_buf = np.empty((size, action_len))
-        self._act_buf = np.empty((size, 1), dtype=np.int)
-        self._rew_buf = np.empty((size, reward_len))
-        self._q_buf = np.empty((size, action_len))
-        self.sample_range = np.arange(0, size, dtype=np.int)
-        self.full = False
-        self.cur_idx = 0
-        self.size = size
-
-    def add_transition(self, observation: np.ndarray, action: np.ndarray, reward: np.ndarray, q_vals: np.ndarray):
-        """Add a transition to buffer.
-
-        Args:
-            observation -- next observation batch of shape (batch_size, observation_len)
-            action      -- current action batch of shape (batch_size, 1)
-            reward      -- current reward batch of shape (batch_size, 1)
-            qs          -- current q-value batch of shape (batch_size, max_moves)
-        """
-        if observation is None:
-            return
-        batch_size = len(observation)
-        if self.cur_idx + batch_size < self.size:
-            self._obs_buf[self.cur_idx : self.cur_idx + batch_size, :] = observation
-            self._act_buf[self.cur_idx : self.cur_idx + batch_size, :] = action.reshape((batch_size, 1))
-            self._rew_buf[self.cur_idx : self.cur_idx + batch_size, :] = reward.reshape((batch_size, 1))
-            self._q_buf[self.cur_idx : self.cur_idx + batch_size, :] = q_vals
-            self.cur_idx += batch_size
-        else:
-            # handle the case when at the end of the buffer
-            tail = self.cur_idx + batch_size - self.size
-            self._obs_buf[self.cur_idx:, :] = observation[:batch_size - tail]
-            self._act_buf[self.cur_idx:, :] = action[:batch_size - tail]
-            self._rew_buf[self.cur_idx:, :] = reward[:batch_size - tail]
-            self._q_buf[self.cur_idx:, :] = q_vals[:batch_size - tail]
-            self._obs_buf[:tail, :] = observation[-tail:]
-            self._act_buf[:tail, :] = action[-tail:]
-            self._rew_buf[:tail, :] = reward[-tail:]
-            self._q_buf[:tail, :] = q_vals[-tail:]
-            self.cur_idx = tail
-            self.full = True
-
-    def sample(self, batch_size: int) -> tuple:
-        """Sample <batch_size> transitions from the ExperienceBuffer.
-
-        Returns (observation{batch_size, observation_len}, action{batch_size, 1},
-                 reward{batch_size, 1}, q_vals{batch_size, max_moves})
-        """
-        indices = np.random.choice(self.sample_range[:self.size if self.full else self.cur_idx],
-                                   size=batch_size)
-        return (self._obs_buf[indices], self._act_buf[indices],
-                self._rew_buf[indices], self._q_buf[indices])
-
 
 class HanabiParallelSession:
     """
