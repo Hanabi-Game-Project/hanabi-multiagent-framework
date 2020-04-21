@@ -14,10 +14,10 @@ class HanabiParallelEnvironment:
         self._parallel_env = pyhanabi.HanabiParallelEnv(env_config, n_parallel)
         self.n_players = self._parallel_env.parent_game.num_players()
 
-    def step(self, action_ids: List[int], agent_id: int) -> Tuple(Tuple(np.ndarray, np.ndarray),
+    def step(self, action_ids: List[int], agent_id: int) -> Tuple[Tuple[np.ndarray, np.ndarray],
                                                                   np.ndarray,
                                                                   np.ndarray,
-                                                                  None):
+                                                                  None]:
         """Take one step in all game states.
         Args:
             action_ids -- list with ids of the actions for each state.
@@ -72,7 +72,7 @@ class HanabiParallelEnvironment:
                 "n_info" : n_info_tokens,
                 }
 
-    def reset_terminal_states(self, current_agent_id: int) -> Tuple(np.ndarray, np.ndarray):
+    def reset_terminal_states(self, current_agent_id: int) -> Tuple[np.ndarray, np.ndarray]:
         """Resets the terminal states and returns upated observations.
 
         Args:
@@ -86,7 +86,7 @@ class HanabiParallelEnvironment:
         return (self._parallel_env.last_observation.batch_observation.copy(),
                 self._parallel_env.last_observation.legal_moves.copy())
 
-    def reset(self) -> Tuple(np.ndarray, np.ndarray):
+    def reset(self) -> Tuple[np.ndarray, np.ndarray]:
         """Resets the environment for a new game. Should be called once after
         the instatiation of this env to retrieve initial observations.
 
@@ -112,7 +112,7 @@ class HanabiParallelEnvironment:
         """Number of parallel states"""
         return self._parallel_env.num_states()
 
-    def observation_spec(self) -> Tuple(dm_specs.BoundedArray, dm_specs.BoundedArray):
+    def observation_spec(self) -> Tuple[dm_specs.BoundedArray, dm_specs.BoundedArray]:
         """Returns the observation spec.
         Observation is a tuple containing observation and legal moves.
         """

@@ -29,7 +29,7 @@ class HanabiParallelSession:
             """Restart counting the agents"""
             self.cur_agent_id = -1
 
-        def next(self) -> Tuple(int, HanabiAgent):
+        def next(self) -> Tuple[int, HanabiAgent]:
             """Get the agent, whose turn it is to play"""
             self.cur_agent_id = (self.cur_agent_id + 1) % self._len
             return self.cur_agent_id, self.agents[self.cur_agent_id]

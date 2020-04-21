@@ -72,8 +72,8 @@ class ExperienceBuffer:
             self.cur_idx = tail
             self.full = True
 
-    def sample(self, batch_size: int) -> Tuple(np.ndarray, np.ndarray, np.ndarray,
-                                               np.ndarray, np.ndarray):
+    def sample(self, batch_size: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray,
+                                               np.ndarray, np.ndarray]:
         """Sample <batch_size> transitions from the ExperienceBuffer.
 
         Returns (observation{batch_size, observation_len}, action{batch_size, 1},
