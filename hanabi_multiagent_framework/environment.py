@@ -98,19 +98,24 @@ class HanabiParallelEnvironment:
                 "n_info" : n_info_tokens,
                 }
 
-    def reset_terminal_states(self, current_agent_id: int) -> Tuple[np.ndarray, np.ndarray]:
+    def reset_states(self,
+                     states: np.ndarray,
+                     current_agent_id: int) -> Tuple[np.ndarray, np.ndarray]:
         """Resets the terminal states and returns upated observations.
 
         Args:
+            states           -- states which should be reset
             current_agent_id -- id of an agent to perform next move.
 
         Returns:
             observation: (vectorized observation, legal moves)
         """
-        self._parallel_env.reset_terminal_states(current_agent_id)
+        self._parallel_env.reset_states(states, current_agent_id)
         self._parallel_env.observe_agent(current_agent_id)
-        return (self._parallel_env.last_observation.batch_observation.copy(),
-                self._parallel_env.last_observation.legal_moves.copy())
+        self.step_types[states] = StepType.FIRST
+        return ((self.last_observation.batch_observation.copy(),
+                 self.last_observation.legal_moves.copy()),
+                self.step_types)
 
     def reset(self) -> Tuple[np.ndarray, np.ndarray]:
         """Resets the environment for a new game. Should be called once after
@@ -120,8 +125,9 @@ class HanabiParallelEnvironment:
             observation: (vectorized observation, legal moves)
         """
         self._parallel_env.reset()
-        return (self._parallel_env.last_observation.batch_observation.copy(),
-                self._parallel_env.last_observation.legal_moves.copy())
+        self.step_types = np.full((self.num_states,), StepType.FIRST)
+        return (self.last_observation.batch_observation.copy(),
+                self.last_observation.legal_moves.copy())
 
     @property
     def max_moves(self):
