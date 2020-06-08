@@ -26,7 +26,7 @@ $ docker build -t hanabi-framework:gpu-rlax -f Dockerfile-gpu-rlax .
 The docker container above is a development version, meaning that it does not contain code neither from this repo, nor from `hanabi-learning-environment`, nor from `hanabi-agents`. Therefore, to run the code you would need to clone these repos and mount them, like so:
 ```
 # clone the repos
-$ git clone https://github.com/braintimeException/hanabi-learning-environment
+$ git clone https://github.com/braintimeException/hanabi-learning-environment --branch feature/parallel-env
 $ git clone https://github.com/braintimeException/hanabi-agents
 
 # run the container with a bash session
