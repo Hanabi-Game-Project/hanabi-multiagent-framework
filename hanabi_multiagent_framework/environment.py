@@ -5,6 +5,7 @@ This file implements a wrapper for hanabi_learning_environment.HanabiParallelEnv
 from typing import Tuple, Dict, List
 import numpy as np
 from dm_env import specs as dm_specs
+from dm_env import TimeStep, StepType
 from hanabi_learning_environment import pyhanabi
 
 class HanabiParallelEnvironment:
@@ -13,6 +14,12 @@ class HanabiParallelEnvironment:
     def __init__(self, env_config: Dict[str, str], n_parallel: int):
         self._parallel_env = pyhanabi.HanabiParallelEnv(env_config, n_parallel)
         self.n_players = self._parallel_env.parent_game.num_players()
+        self.step_types = np.full((n_parallel,), StepType.FIRST)
+
+    @property
+    def last_observation(self):
+        """Last observation"""
+        return self._parallel_env.last_observation
 
     def step(self, action_ids: List[int], agent_id: int) -> Tuple[Tuple[np.ndarray, np.ndarray],
                                                                   np.ndarray,
@@ -112,22 +119,54 @@ class HanabiParallelEnvironment:
         """Number of parallel states"""
         return self._parallel_env.num_states()
 
-    def observation_spec(self) -> Tuple[dm_specs.BoundedArray, dm_specs.BoundedArray]:
-        """Returns the observation spec.
+    @property
+    def num_players(self):
+        """Number of parallel states"""
+        return self._parallel_env.parent_game.num_players()
+
+    def observation_spec_vec(self) -> Tuple[dm_specs.BoundedArray, dm_specs.BoundedArray]:
+        """Returns the vectorized observation spec.
         Observation is a tuple containing observation and legal moves.
         """
         return (dm_specs.BoundedArray(shape=(self.num_states, self.observation_len),
                                       dtype=np.int8,
-                                      name="agent_observation",
+                                      name="agent_observations",
                                       minimum=0, maximum=1),
                 dm_specs.BoundedArray(shape=(self.num_states, self.max_moves),
                                       dtype=np.int8,
                                       name="legal_moves",
                                       minimum=0, maximum=1))
 
-    def action_spec(self) -> dm_specs.BoundedArray:
-        """Returns the action spec."""
+    def observation_spec(self) -> Tuple[dm_specs.BoundedArray, dm_specs.BoundedArray]:
+        """Returns the observation spec.
+        Observation is a tuple containing observation and legal moves.
+        """
+        return (dm_specs.BoundedArray(shape=(self.observation_len,),
+                                      dtype=np.float16,
+                                      name="agent_observation",
+                                      minimum=0, maximum=1),
+                dm_specs.BoundedArray(shape=(self.max_moves,),
+                                      dtype=np.float16,
+                                      name="legal_moves",
+                                      minimum=0, maximum=1))
+
+    def action_spec_vec(self) -> dm_specs.BoundedArray:
+        """Returns the vectorized action spec."""
         return dm_specs.BoundedArray(shape=(self.num_states,),
                                      dtype=np.int,
                                      name="actions",
                                      minimum=0, maximum=self.max_moves)
+
+    def action_spec(self) -> dm_specs.DiscreteArray:
+        """Returns the action spec."""
+        return dm_specs.DiscreteArray(self.max_moves,
+                                      dtype=np.int,
+                                      name="action")
+
+    def reward_spec_vec(self) -> dm_specs.Array:
+        """Returns the vectorized reward spec."""
+        return dm_specs.Array(shape=(self.num_states,), dtype=float, name="reward")
+
+    def reward_spec(self) -> dm_specs.Array:
+        """Returns the reward spec."""
+        return dm_specs.Array(shape=(), dtype=float, name="reward")
