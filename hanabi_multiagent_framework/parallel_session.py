@@ -1,11 +1,12 @@
 """
-This file defines a class for managing parallel games of hanabi
+This file defines a class for managing parallel games of hanabi and agents
 
 Throughout this file you will find suffixes _t and _tm1. It designates temporal correspondence:
 t stands for "at time t" and tm1 stands for "at time t - 1"
 """
 from typing import List, Dict, Tuple
 import numpy as np
+from dm_env import StepType
 from .agent import HanabiAgent
 from .environment import HanabiParallelEnvironment
 from .experience_buffer import ExperienceBuffer
@@ -13,7 +14,7 @@ from .utils import eval_pretty_print
 
 class HanabiParallelSession:
     """
-    A class for instantiating and running parallel game sessions
+    A class for running parallel game sessions
     """
 
     class AgentRingQueue:
@@ -39,33 +40,31 @@ class HanabiParallelSession:
 
 
     def __init__(self,
-                 agents: List[HanabiAgent],
-                 env_config: Dict[str, str],
-                 n_states: int,
-                 exp_buffer_size: int = 200_000):
+                 env: HanabiParallelEnvironment,
+                 agents: List[HanabiAgent]):
         """Constructor.
         Args:
+            env        -- hanabi parallel environment.
             agents     -- list with instances of agents.
-            env_config -- configuration for the hanabi game.
-            n_states   -- number of states.
             exp_buffer_size -- size of the experience buffer.
         """
-        assert len(agents) == env_config['players']
+        assert len(agents) == env.num_players
         self.agents = HanabiParallelSession.AgentRingQueue(agents)
-        self.parallel_env = HanabiParallelEnvironment(env_config, n_states)
-        self.env_config = env_config
-        self.n_states = n_states
+        self.parallel_env = env
+        self.n_states = env.num_states
         self.obs_len = self.parallel_env.observation_len
         self.max_moves = self.parallel_env.max_moves
-        self.experience = [ExperienceBuffer(self.obs_len, self.max_moves, 1, exp_buffer_size)
-                           for _ in agents]
         self._cur_obs, self._cur_lm = None, None
         self.reset()
+        # variables to preserve the agents' rewards between runs
+        self.agent_cum_rewards, self.agent_terminal_states = None, None
 
     def reset(self):
         """Reset the session, i.e. reset the all states and start from agent 0."""
         self.agents.reset()
         self._cur_obs, self._cur_lm = self.parallel_env.reset()
+        self.agent_cum_rewards = np.zeros((len(self.agents), self.n_states, 1))
+        self.agent_contiguous_states = np.full((len(self.agents), self.n_states), True)
 
     def run_eval(self, print_intermediate: bool = True) -> np.ndarray:
         """Run each state until the end and return the final scores.
@@ -76,26 +75,24 @@ class HanabiParallelSession:
         #  print("Running evaluation")
         total_reward = np.zeros((self.n_states,))
         step_rewards = []
-        done = np.full((self.n_states, ), False)
-        # run until all states reach terminus
+        step_types = self.parallel_env.step_types
+
         step = 0
+        done = np.full((self.n_states, ), False)
+        # run until all states terminate
         while not np.all(done):
             valid_states = np.logical_not(done)
             agent_id, agent = self.agents.next()
-            self._cur_obs, self._cur_lm = self.parallel_env.reset_terminal_states(agent_id)
+            (self._cur_obs, self._cur_lm), step_types = \
+                self.parallel_env.reset_states(
+                    np.nonzero(step_types == StepType.LAST)[0], agent_id)
 
             actions = agent.exploit(self._cur_obs, self._cur_lm)
-            actions = list(actions)
-            n_illegal = 0
-            for i, (a, lm) in enumerate(zip(actions, self._cur_lm)):
-                if lm[a] != 1:
-                    n_illegal += 1
-                    actions[i] = np.argmax(lm)
 
-            (self._cur_obs, self._cur_lm), reward, done_cur, _ = \
+            (self._cur_obs, self._cur_lm), reward, step_types = \
                     self.parallel_env.step(actions, agent_id)
             total_reward[valid_states] += reward[valid_states]
-            done = np.logical_or(done, done_cur == 1)
+            done = np.logical_or(done, step_types == StepType.LAST)
             if print_intermediate:
                 step_rewards.append({"terminated": np.sum(done), "rewards" : reward[valid_states]})
             step += 1
