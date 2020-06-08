@@ -37,21 +37,40 @@ class HanabiParallelEnvironment:
               - info (always None)
         """
 
-        last_score = self._parallel_env.last_observation.scores.copy()
-        # Apply the action to the state.
+        last_score = self.last_observation.scores.copy()
+
+        # Detect any illegal moves
+        illegal_move_ids = \
+                self.last_observation.legal_moves[range(self.num_states), action_ids] == 0
+
+        # Replace illegal moves with legal ones. This is done to avoid exceptions in the underlying
+        # hanabi learning environment which assumes that the client handles the exception and always
+        # supplies the legal ones.
+        # Illegal moves are considered as loosing the game and are punished as such.
+        # The corresponding states are marked as terminal and should be restarted.
+        action_ids[illegal_move_ids] = \
+                np.argmax(self.last_observation.legal_moves[illegal_move_ids], axis=1)
+
         self._parallel_env.apply_batch_move(action_ids, agent_id)
 
         # Observe next agent
         self._parallel_env.observe_agent((agent_id + 1) % self.n_players)
 
-        # Reward is score differential. May be large and negative at game end.
-        reward = self._parallel_env.last_observation.scores - last_score
+        # Reward is the score differential. May be large and negative at game end.
+        reward = self.last_observation.scores - last_score
+        # illegal moves are punished as loosing the game
+        reward[illegal_move_ids] = -last_score[illegal_move_ids]
 
-        return ((self._parallel_env.last_observation.batch_observation.copy(),
-                 self._parallel_env.last_observation.legal_moves.copy()),
+        terminal = np.logical_or(illegal_move_ids,
+                                 self.last_observation.done == 1)
+
+        self.step_types = np.full((self.num_states,), StepType.MID)
+        self.step_types[terminal] = StepType.LAST
+
+        return ((self.last_observation.batch_observation,
+                 self.last_observation.legal_moves),
                 reward,
-                self._parallel_env.last_observation.done.copy(),
-                None) # no additional info
+                self.step_types)
 
     @property
     def game_config(self):
