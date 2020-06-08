@@ -7,19 +7,8 @@ RUN mkdir /dm-tools && \
     git clone https://github.com/deepmind/rlax.git /dm-tools/rlax && \
     wget -O /dm-tools/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 
-
-#FROM tensorflow/tensorflow:latest-gpu-py3
-#FROM python:3.7-buster
-FROM nvidia/cuda:10.2-cudnn7-devel
+FROM nvidia/cuda:10.1-cudnn7-devel
 COPY --from=hanabi-fetch /dm-tools /dm-tools/
-#RUN curl -L http://us.download.nvidia.com/XFree86/Linux-x86_64/435.17/NVIDIA-Linux-x86_64-435.17.run &&
-# CUDNN
-#RUN curl -L -o cuda_10.2.89_440.33.01_linux.run http://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_440.33.01_linux.run && \
-#    sh cuda_10.2.89_440.33.01_linux.run
-#RUN apt-get update && apt-get install -y --no-install-recommends 
-#RUN python3 --version
-# RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && python3 get-pip.py
-
 
 # conda
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
@@ -33,10 +22,7 @@ RUN /bin/bash /dm-tools/miniconda.sh -b -p /opt/conda && \
     find /opt/conda/ -follow -type f -name '*.a' -delete && \
     find /opt/conda/ -follow -type f -name '*.js.map' -delete && \
     /opt/conda/bin/conda clean -afy && \
-    pip install --upgrade pip && \
-    sh install_jax.sh
-
-# RUN which python && which pip && python --version && pip --version
+    pip install --upgrade pip
 
 RUN cd /dm-tools && ls -lah && \
     cd hanabi-learning-environment && pip install . && cd .. && \
@@ -44,6 +30,8 @@ RUN cd /dm-tools && ls -lah && \
     cd dm-haiku                    && pip install . && cd .. && \
     cd rlax                        && pip install . && cd ..
 
-RUN rm -rf /dm-tools
+ADD install_jax.sh /
+RUN sh /install_jax.sh && \
+    rm -rf /dm-tools
 
 CMD [ "/bin/bash" ]
