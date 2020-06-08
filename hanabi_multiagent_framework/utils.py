@@ -137,8 +137,8 @@ def make_hanabi_env_config(
         }
     else:
         raise ValueError("Unknown environment {}".format(environment_name))
-    env = rl_env.HanabiEnv(config=config)
-    return config, env.num_moves(), env.vectorized_observation_shape()
+    #  env = rl_env.HanabiEnv(config=config)
+    return config#, env.num_moves(), env.vectorized_observation_shape()
 
 
 
