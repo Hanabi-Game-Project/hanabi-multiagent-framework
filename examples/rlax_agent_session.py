@@ -5,6 +5,7 @@ from hanabi_multiagent_framework.utils import make_hanabi_env_config
 from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams
 
 def main(
+        agent_config_path=None,
         hanabi_game_type="Hanabi-Small-Oracle",
         n_players=2,
         max_life_tokens=None,
@@ -46,7 +47,8 @@ def main(
     env = hmf.HanabiParallelEnvironment(env_conf, n_parallel)
     eval_env = hmf.HanabiParallelEnvironment(env_conf, eval_n_parallel)
 
-    gin.parse_config_file('rlax_agent.gin')
+    if agent_config_path is not None:
+        gin.parse_config_file(agent_config_path)
     agent_params = RlaxRainbowParams(
             #  train_batch_size=512,
             #  target_update_period=500,
@@ -97,17 +99,17 @@ def main(
         # eval after
         parallel_eval_session.run_eval()
 
-if __name__ == "main":
+if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Train a dm-rlax based rainbow agent.")
 
     parser.add_argument(
         "--hanabi_game_type", type=str, default="Hanabi-Small-Oracle",
         help='Can be "Hanabi-{VerySmall,Small,Full}-{Oracle,CardKnowledge}"')
-    parser.add_argument("--n_players", type=int, default=2, help="Number of players")
+    parser.add_argument("--n_players", type=int, default=2, help="Number of players.")
     parser.add_argument(
         "--max_life_tokens", type=int, default=None,
-        help="Set a different number of life tokens")
+        help="Set a different number of life tokens.")
     parser.add_argument(
         "--n_parallel", type=int, default=32,
         help="Number of games run in parallel during training.")
@@ -116,20 +118,24 @@ if __name__ == "main":
         help="Whether the agent should play with itself, or an independent agent instance should be created for each player.")
     parser.add_argument(
         "--n_train_steps", type=int, default=4,
-        help="Number of training steps made in each iteration. One iteration consists of n_sim_steps followed by n_train_steps")
+        help="Number of training steps made in each iteration. One iteration consists of n_sim_steps followed by n_train_steps.")
     parser.add_argument(
         "--n_sim_steps", type=int, default=2,
-        help="Number of environment steps made in each iteration")
+        help="Number of environment steps made in each iteration.")
     parser.add_argument(
         "--epochs", type=int, default=1_000_000,
-        help="Total number of rotations = epochs * eval_freq")
+        help="Total number of rotations = epochs * eval_freq.")
     parser.add_argument(
         "--eval_n_parallel", type=int, default=1_000,
-        help="Number of parallel games to use for evaluation")
+        help="Number of parallel games to use for evaluation.")
     parser.add_argument(
         "--eval_freq", type=int, default=500,
-        help="Number of iterations to perform between evaluations")
+        help="Number of iterations to perform between evaluations.")
+
+    parser.add_argument(
+        "--agent_config_path", type=str, default=None,
+        help="Path to gin config file for rlax rainbow agent.")
 
     args = parser.parse_args()
 
-    main(**args)
+    main(**vars(args))
