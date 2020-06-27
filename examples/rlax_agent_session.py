@@ -1,69 +1,135 @@
+import numpy as np
+import gin
 import hanabi_multiagent_framework as hmf
 from hanabi_multiagent_framework.utils import make_hanabi_env_config
-import numpy as np
-from collections import namedtuple
-from hanabi_agents.rlax_dqn import DQNAgent
+from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams
 
-n_players = 2
-n_parallel = 32
-epochs = 1_000_000
-eval_n_parallel = 1_000
-eval_freq = 300
+def main(
+        hanabi_game_type="Hanabi-Small-Oracle",
+        n_players=2,
+        max_life_tokens=None,
+        n_parallel=64,
+        self_play=True,
+        n_train_steps=5,
+        n_sim_steps=2,
+        epochs=1_000_000,
+        eval_n_parallel=1_000,
+        eval_freq=500,
+    ):
 
-def create_scheduler(eps_start, eps_min, steps1, steps2):
-    def scheduler(x):
-        if x <= steps1:
-            return eps_start
-        elif x <= steps2:
-            return eps_start / 2
-        else:
-            return max(eps_min, min(eps_start / (x - steps2) * 10000, eps_start / 2))
-    return scheduler
+    def create_exp_decay_scheduler(val_start, val_min, inflection1, inflection2):
+        def scheduler(step):
+            if step <= inflection1:
+                return val_start
+            elif step <= inflection2:
+                return val_start / 2
+            else:
+                return max(val_min, min(val_start / (step - inflection2) * 10000, val_start / 2))
+        return scheduler
 
-schedule = create_scheduler(0.9, 0.05, 200_000, 2_000_000)
+    def create_linear_scheduler(val_start, val_end, interscept):
+        def scheduler(step):
+            return min(val_end, val_start + step * interscept)
+        return scheduler
 
-env_conf = make_hanabi_env_config('Hanabi-Full-Oracle', n_players)
+    eps_schedule = create_exp_decay_scheduler(0.5, 0.01, 200_000, 2_000_000)
+    beta_is_schedule = create_linear_scheduler(0.0, 1.0, 25e-7 / 4)
 
-env = hmf.HanabiParallelEnvironment(env_conf, n_parallel)
-eval_env = hmf.HanabiParallelEnvironment(env_conf, eval_n_parallel)
-#  env_conf["max_life_tokens"] = 3
-#  obs_shape[0] += env_conf["max_life_tokens"] - 1
+    #  env_conf = make_hanabi_env_config('Hanabi-Full-Oracle', n_players)
+    #  env_conf = make_hanabi_env_config('Hanabi-Full-CardKnowledge', n_players)
+    #  env_conf = make_hanabi_env_config('Hanabi-Small-Oracle', n_players)
+    #  env_conf = make_hanabi_env_config('Hanabi-Small-CardKnowledge', n_players)
+    env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
+    if max_life_tokens is not None:
+        env_conf["max_life_tokens"] = str(max_life_tokens)
 
-self_play_agent = DQNAgent(env.observation_spec_vec()[0], env.action_spec(),
-                           target_update_period=500,
-                           learning_rate=5e-6,
-                           epsilon=schedule,
-                           layers=[512, 512])
+    env = hmf.HanabiParallelEnvironment(env_conf, n_parallel)
+    eval_env = hmf.HanabiParallelEnvironment(env_conf, eval_n_parallel)
 
-#  agents = [DQNAgent(obs_shape, nb_actions) for _ in range(n_players)]
-agents = [self_play_agent for _ in range(n_players)]
+    gin.parse_config_file('rlax_agent.gin')
+    agent_params = RlaxRainbowParams(
+            #  train_batch_size=512,
+            #  target_update_period=500,
+            #  learning_rate=2.5e-5,
+            #  epsilon=lambda x: 0.2,
+            #  beta_is=lambda x: 0.2,
+            #  layers=[512, 512]
+            )
 
-parallel_session = hmf.HanabiParallelSession(env, agents)
+    if self_play:
+        self_play_agent = DQNAgent(
+            env.observation_spec_vec_batch()[0],
+            env.action_spec_vec(),
+            agent_params)
 
-parallel_eval_session = hmf.HanabiParallelSession(eval_env, agents)
+        agents = [self_play_agent for _ in range(n_players)]
+    else:
+        agents = [DQNAgent(env.observation_spec_vec()[0], env.action_spec(),
+                           agent_params) for _ in range(n_players)]
 
-print("Game config", parallel_session.parallel_env.game_config)
+    parallel_session = hmf.HanabiParallelSession(env, agents)
+    parallel_session.reset()
 
-# eval before
-parallel_eval_session.run_eval()
+    parallel_eval_session = hmf.HanabiParallelSession(eval_env, agents)
 
-# train
-parallel_session.train(n_iter=eval_freq,
-                       n_sim_steps=n_players,
-                       n_train_steps=2,
-                       n_warmup=10,
-                       train_batch_size=256)
+    print("Game config", parallel_session.parallel_env.game_config)
 
-print("step", 1 * eval_freq)
-# eval
-parallel_eval_session.run_eval()
-
-for i in range(epochs // eval_freq):
-    parallel_session.train(n_iter=eval_freq,
-                           n_sim_steps=n_players,
-                           n_train_steps=2,
-                           n_warmup=0,
-                           train_batch_size=256)
-    print("step", (i + 2) * eval_freq)
-    # eval after
+    # eval before
     parallel_eval_session.run_eval()
+    # train
+    parallel_session.train(
+        n_iter=eval_freq,
+        n_sim_steps=n_sim_steps,
+        n_train_steps=n_train_steps,
+        n_warmup=int(agent_params.train_batch_size * 5 * n_players / n_sim_steps / n_parallel))
+
+    print("step", 1 * eval_freq * n_train_steps)
+    # eval
+    parallel_eval_session.run_eval()
+
+    for i in range(epochs):
+        parallel_session.train(
+            n_iter=eval_freq,
+            n_sim_steps=n_sim_steps,
+            n_train_steps=n_train_steps,
+            n_warmup=0)
+        print("step", (i + 2) * eval_freq * n_train_steps)
+        # eval after
+        parallel_eval_session.run_eval()
+
+if __name__ == "main":
+    import argparse
+    parser = argparse.ArgumentParser(description="Train a dm-rlax based rainbow agent.")
+
+    parser.add_argument(
+        "--hanabi_game_type", type=str, default="Hanabi-Small-Oracle",
+        help='Can be "Hanabi-{VerySmall,Small,Full}-{Oracle,CardKnowledge}"')
+    parser.add_argument("--n_players", type=int, default=2, help="Number of players")
+    parser.add_argument(
+        "--max_life_tokens", type=int, default=None,
+        help="Set a different number of life tokens")
+    parser.add_argument(
+        "--n_parallel", type=int, default=32,
+        help="Number of games run in parallel during training.")
+    parser.add_argument(
+        "--self_play", type=bool, default=True,
+        help="Whether the agent should play with itself, or an independent agent instance should be created for each player.")
+    parser.add_argument(
+        "--n_train_steps", type=int, default=4,
+        help="Number of training steps made in each iteration. One iteration consists of n_sim_steps followed by n_train_steps")
+    parser.add_argument(
+        "--n_sim_steps", type=int, default=2,
+        help="Number of environment steps made in each iteration")
+    parser.add_argument(
+        "--epochs", type=int, default=1_000_000,
+        help="Total number of rotations = epochs * eval_freq")
+    parser.add_argument(
+        "--eval_n_parallel", type=int, default=1_000,
+        help="Number of parallel games to use for evaluation")
+    parser.add_argument(
+        "--eval_freq", type=int, default=500,
+        help="Number of iterations to perform between evaluations")
+
+    args = parser.parse_args()
+
+    main(**args)
