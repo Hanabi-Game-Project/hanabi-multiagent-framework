@@ -2,6 +2,8 @@
 A collection of helper functions
 """
 from hanabi_learning_environment import pyhanabi, rl_env
+import numpy as np
+from scipy import stats
 
 def canonical_obsevation_substitute_colors(vectorized_observation, substitution_map, offsets):
     """Replace colors in the observation according to the provided map
@@ -318,6 +320,19 @@ class ObservationCanonicalDecoder:
         card_knowledge = {}
         return offset, card_knowledge
 
+def print_hist(reward, max_bin, height=10):
+    h, b = np.histogram(reward, range(0, int(max_bin) + 1))
+    scale = height / len(reward)
+    cols = []
+    for h_ in h:
+        counts = int(h_ * scale)
+        cols.append(list(('#' * counts) + (' ' * (height - counts))))
+    cols = np.array(cols)
+    for row_idx in range(height // 2, -1, -1):
+        print(f"{int((row_idx + 1) / scale):6}" + "| " + "  ".join(cols[:, row_idx]))
+    print("      -" + "---" * int(max_bin + 1))
+    print("       " + " ".join([f"{int(b_):2}" for b_ in b]))
+
 
 def eval_pretty_print(step_rewards, total_reward):
     steps_descr      = "| Step       |"
@@ -357,5 +372,6 @@ def eval_pretty_print(step_rewards, total_reward):
         print(mins_descr + mi)
         print(maxs_descr + ma)
         print(border)
-    print(f"Total: {total_reward.mean():.3f} {total_reward.std():.3f} {int(total_reward.min()):2} {int(total_reward.max()):2}")
+    print(f"Total: mean {total_reward.mean():.3f} med {np.median(total_reward):.0f} mode(s) {stats.mode(total_reward, axis=None)[0]} std {total_reward.std():.3f} min {int(total_reward.min()):2} max {int(total_reward.max()):2}")
+    print_hist(total_reward, 25, height=20)
     print('')
