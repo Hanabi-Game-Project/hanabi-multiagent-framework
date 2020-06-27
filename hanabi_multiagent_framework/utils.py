@@ -43,7 +43,7 @@ def make_hanabi_env_config(
             "observation_type":
                 pyhanabi.AgentObservationType.CARD_KNOWLEDGE.value
         }
-    if environment_name == "Hanabi-Full-Oracle":
+    elif environment_name == "Hanabi-Full-Oracle":
         config = {
             "colors":
                 5,
@@ -67,7 +67,7 @@ def make_hanabi_env_config(
             "max_life_tokens": 3,
             "observation_type": pyhanabi.AgentObservationType.MINIMAL.value
         }
-    elif environment_name == "Hanabi-Small":
+    elif environment_name in ["Hanabi-Small", "Hanabi-Small-CardKnowledge"]:
         config = {
             "colors":
                 2,
@@ -137,8 +137,7 @@ def make_hanabi_env_config(
         }
     else:
         raise ValueError("Unknown environment {}".format(environment_name))
-    #  env = rl_env.HanabiEnv(config=config)
-    return config#, env.num_moves(), env.vectorized_observation_shape()
+    return {k : str(v) for k, v in config.items()}
 
 
 

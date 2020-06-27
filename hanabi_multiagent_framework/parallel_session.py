@@ -54,7 +54,7 @@ class HanabiParallelSession:
         self.n_states = env.num_states
         self.obs_len = self.parallel_env.observation_len
         self.max_moves = self.parallel_env.max_moves
-        self._cur_obs, self._cur_lm = None, None
+        self._cur_obs = None
         self.reset()
         # variables to preserve the agents' rewards between runs
         self.agent_cum_rewards, self.agent_terminal_states = None, None
@@ -62,7 +62,7 @@ class HanabiParallelSession:
     def reset(self):
         """Reset the session, i.e. reset the all states and start from agent 0."""
         self.agents.reset()
-        self._cur_obs, self._cur_lm = self.parallel_env.reset()
+        self._cur_obs = self.parallel_env.reset()
         self.agent_cum_rewards = np.zeros((len(self.agents), self.n_states, 1))
         self.agent_contiguous_states = np.full((len(self.agents), self.n_states), True)
 
@@ -72,6 +72,7 @@ class HanabiParallelSession:
             print_intermediate -- Flag indicating whether each step of evaluation should be printed.
         """
         self.reset()
+        print("Agents", self.agents.agents)
         #  print("Running evaluation")
         total_reward = np.zeros((self.n_states,))
         step_rewards = []
@@ -83,13 +84,14 @@ class HanabiParallelSession:
         while not np.all(done):
             valid_states = np.logical_not(done)
             agent_id, agent = self.agents.next()
-            (self._cur_obs, self._cur_lm), step_types = \
+            self._cur_obs, step_types = \
                 self.parallel_env.reset_states(
                     np.nonzero(step_types == StepType.LAST)[0], agent_id)
 
-            actions = agent.exploit(self._cur_obs, self._cur_lm)
+            obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
+            actions = agent.exploit(obs)
 
-            (self._cur_obs, self._cur_lm), reward, step_types = \
+            self._cur_obs, reward, step_types = \
                     self.parallel_env.step(actions, agent_id)
             total_reward[valid_states] += reward[valid_states]
             done = np.logical_or(done, step_types == StepType.LAST)
@@ -111,10 +113,11 @@ class HanabiParallelSession:
 
         def handle_terminal_states(step_types, agent_id):
             terminal = step_types == StepType.LAST
-            (self._cur_obs, self._cur_lm), step_types = self.parallel_env.reset_states(
+            self._cur_obs, step_types = self.parallel_env.reset_states(
                 np.nonzero(terminal)[0],
                 agent_id)
-            agent.add_experience_first(self._cur_obs, self._cur_lm, step_types)
+            obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
+            agent.add_experience_first(obs, step_types)
 
         while cur_step < n_steps:
             # beginning of the agent's turn.
@@ -123,16 +126,17 @@ class HanabiParallelSession:
             handle_terminal_states(self.parallel_env.step_types, agent_id)
 
             # agent acts
-            actions = agent.explore(self._cur_obs, self._cur_lm)
+            obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
+            actions = agent.explore(obs)
 
             # apply actions to the states and get new observations, rewards, statuses.
-            (self._cur_obs, self._cur_lm), rewards, step_types = self.parallel_env.step(
+            self._cur_obs, rewards, step_types = self.parallel_env.step(
                 actions, agent_id)
 
             # reward is cumulative over the course of the whole round.
             # i.e. the agents gets a reward for his action as well as for the
             # actions of its co-players.
-            self.agent_cum_rewards[:, self.agent_contiguous_states] += np.broadcast_to(
+            self.agent_cum_rewards[self.agent_contiguous_states] += np.broadcast_to(
                 rewards.reshape((-1, 1)),
                 self.agent_cum_rewards.shape)[self.agent_contiguous_states]
 
@@ -142,9 +146,9 @@ class HanabiParallelSession:
             self.agent_contiguous_states[agent_id, :] = True
 
             # add new experiences to the agent
+            obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
             agent.add_experience(
-                self._cur_obs,
-                self._cur_lm,
+                obs,
                 actions,
                 self.agent_cum_rewards[agent_id],
                 step_types)
@@ -178,3 +182,10 @@ class HanabiParallelSession:
             for _ in range(n_train_steps):
                 for agent in self.agents.agents:
                     agent.update()
+
+    def preprocess_obs_for_agent(self, obs, agent):
+        if agent.requires_vectorized_observation():
+            vobs = np.array(self.parallel_env._parallel_env.encoded_observations)
+            vlms = np.array(self.parallel_env._parallel_env.encoded_legal_moves)
+            return (obs, (vobs, vlms))
+        return obs

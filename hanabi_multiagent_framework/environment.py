@@ -2,73 +2,69 @@
 This file implements a wrapper for hanabi_learning_environment.HanabiParallelEnv.
 """
 
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Union
 import numpy as np
 from dm_env import specs as dm_specs
 from dm_env import TimeStep, StepType
-from hanabi_learning_environment import pyhanabi
+from hanabi_learning_environment import pyhanabi_pybind as pyhanabi
 
 class HanabiParallelEnvironment:
     """Hanabi parallel environment wrapper for use with HanabiParallelSession.
     """
     def __init__(self, env_config: Dict[str, str], n_parallel: int):
         self._parallel_env = pyhanabi.HanabiParallelEnv(env_config, n_parallel)
-        self.n_players = self._parallel_env.parent_game.num_players()
-        self.step_types = np.full((n_parallel,), StepType.FIRST)
+        self.n_players = self._parallel_env.parent_game.num_players
+        self.step_types = None
+        self.last_observation = None
 
-    @property
-    def last_observation(self):
-        """Last observation"""
-        return self._parallel_env.last_observation
-
-    def step(self, action_ids: List[int], agent_id: int) -> Tuple[Tuple[np.ndarray, np.ndarray],
-                                                                  np.ndarray,
-                                                                  np.ndarray,
-                                                                  None]:
+    def step(self,
+             actions: Union[List[pyhanabi.HanabiMove], List[int]],
+             agent_id: int
+            ) -> Tuple[List[pyhanabi.HanabiObservation], np.ndarray, np.ndarray]:
         """Take one step in all game states.
         Args:
-            action_ids -- list with ids of the actions for each state.
+            actions -- list with moves or with ids of moves for each state.
             agent_id -- id of the agent taking the actions.
         Return:
             a tuple consisting of:
-              - observation tuple (vectorized observation, legal moves)
+              - observation array
               - reward array
-              - done array
-              - info (always None)
+              - step_type array
         """
 
-        last_score = self.last_observation.scores.copy()
+        last_score = np.array(self._parallel_env.get_scores())
 
         # Detect any illegal moves
-        illegal_move_ids = \
-                self.last_observation.legal_moves[range(self.num_states), action_ids] == 0
+        #  moves_illegal = np.logical_not(self._parallel_env.moves_are_legal(actions))
 
         # Replace illegal moves with legal ones. This is done to avoid exceptions in the underlying
         # hanabi learning environment which assumes that the client handles the exception and always
         # supplies the legal ones.
-        # Illegal moves are considered as loosing the game and are punished as such.
+        # UPDATE: this happens on cpp side now => only need to handle the consequences of the
+        # illegal moves as follows:
+        # Illegal moves are considered as loosing the game immediately and are punished as such.
         # The corresponding states are marked as terminal and should be restarted.
-        action_ids[illegal_move_ids] = \
-                np.argmax(self.last_observation.legal_moves[illegal_move_ids], axis=1)
-
-        self._parallel_env.apply_batch_move(action_ids, agent_id)
+        self._parallel_env.step(actions, agent_id, (agent_id + 1) % self.n_players)
+        moves_illegal = self._parallel_env.illegal_moves
 
         # Observe next agent
-        self._parallel_env.observe_agent((agent_id + 1) % self.n_players)
+        self.last_observation = self._parallel_env.state_observations
+        score = np.array(self._parallel_env.get_scores())
 
         # Reward is the score differential. May be large and negative at game end.
-        reward = self.last_observation.scores - last_score
+        reward = score - last_score
         # illegal moves are punished as loosing the game
-        reward[illegal_move_ids] = -last_score[illegal_move_ids]
+        reward[moves_illegal] = -last_score[moves_illegal]
 
-        terminal = np.logical_or(illegal_move_ids,
-                                 self.last_observation.done == 1)
+        terminal = np.logical_or(
+            moves_illegal,
+            np.array(self._parallel_env.get_state_statuses()) \
+                != pyhanabi.HanabiState.EndOfGameType.kNotFinished)
 
         self.step_types = np.full((self.num_states,), StepType.MID)
         self.step_types[terminal] = StepType.LAST
 
-        return ((self.last_observation.batch_observation,
-                 self.last_observation.legal_moves),
+        return (self.last_observation,
                 reward,
                 self.step_types)
 
@@ -83,13 +79,13 @@ class HanabiParallelEnvironment:
           -- number of like tokens,
           -- number of information token.
         """
-        hand_size = self._parallel_env.parent_game.hand_size()
-        n_cards = self._parallel_env.parent_game.num_colors() \
-                * self._parallel_env.parent_game.cards_per_color()
-        n_colors = self._parallel_env.parent_game.num_colors()
-        n_ranks = self._parallel_env.parent_game.num_ranks()
-        n_life_tokens = self._parallel_env.parent_game.max_life_tokens()
-        n_info_tokens = self._parallel_env.parent_game.max_information_tokens()
+        hand_size = self._parallel_env.parent_game.hand_size
+        n_cards = self._parallel_env.parent_game.num_colors \
+                * self._parallel_env.parent_game.cards_per_color
+        n_colors = self._parallel_env.parent_game.num_colors
+        n_ranks = self._parallel_env.parent_game.num_ranks
+        n_life_tokens = self._parallel_env.parent_game.max_life_tokens
+        n_info_tokens = self._parallel_env.parent_game.max_information_tokens
         return {"hand_size" : hand_size,
                 "n_cards" : n_cards,
                 "n_colors" : n_colors,
@@ -111,10 +107,9 @@ class HanabiParallelEnvironment:
             observation: (vectorized observation, legal moves)
         """
         self._parallel_env.reset_states(states, current_agent_id)
-        self._parallel_env.observe_agent(current_agent_id)
+        self.last_observation = self._parallel_env.observe_agent(current_agent_id)
         self.step_types[states] = StepType.FIRST
-        return ((self.last_observation.batch_observation.copy(),
-                 self.last_observation.legal_moves.copy()),
+        return (self.last_observation,
                 self.step_types)
 
     def reset(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -125,33 +120,33 @@ class HanabiParallelEnvironment:
             observation: (vectorized observation, legal moves)
         """
         self._parallel_env.reset()
+        self.last_observation = self._parallel_env.observe_agent(0)
         self.step_types = np.full((self.num_states,), StepType.FIRST)
-        return (self.last_observation.batch_observation.copy(),
-                self.last_observation.legal_moves.copy())
+        return self.last_observation
 
     @property
     def max_moves(self):
         """Total number of possible moves"""
-        return self._parallel_env.parent_game.max_moves()
+        return self._parallel_env.parent_game.max_moves
 
     @property
     def observation_len(self):
         """length of the vectorized observation of a single state"""
-        return self._parallel_env.observation_len()
+        return self._parallel_env.get_observation_flat_length()
 
     @property
     def num_states(self):
         """Number of parallel states"""
-        return self._parallel_env.num_states()
+        return self._parallel_env.num_states
 
     @property
     def num_players(self):
         """Number of parallel states"""
-        return self._parallel_env.parent_game.num_players()
+        return self._parallel_env.parent_game.num_players
 
-    def observation_spec_vec(self) -> Tuple[dm_specs.BoundedArray, dm_specs.BoundedArray]:
-        """Returns the vectorized observation spec.
-        Observation is a tuple containing observation and legal moves.
+    def observation_spec_vec_batch(self) -> Tuple[dm_specs.BoundedArray, dm_specs.BoundedArray]:
+        """Returns the vectorized encoded observation spec.
+        Observation is a tuple containing observations and legal moves.
         """
         return (dm_specs.BoundedArray(shape=(self.num_states, self.observation_len),
                                       dtype=np.int8,
@@ -162,9 +157,9 @@ class HanabiParallelEnvironment:
                                       name="legal_moves",
                                       minimum=0, maximum=1))
 
-    def observation_spec(self) -> Tuple[dm_specs.BoundedArray, dm_specs.BoundedArray]:
-        """Returns the observation spec.
-        Observation is a tuple containing observation and legal moves.
+    def observation_spec_vec(self) -> Tuple[dm_specs.BoundedArray, dm_specs.BoundedArray]:
+        """Returns the encoded observation spec.
+        Encoded observation is a tuple containing observations and legal moves.
         """
         return (dm_specs.BoundedArray(shape=(self.observation_len,),
                                       dtype=np.float16,
@@ -175,23 +170,23 @@ class HanabiParallelEnvironment:
                                       name="legal_moves",
                                       minimum=0, maximum=1))
 
-    def action_spec_vec(self) -> dm_specs.BoundedArray:
-        """Returns the vectorized action spec."""
+    def action_spec_vec_batch(self) -> dm_specs.BoundedArray:
+        """Returns the vectorized encoded action spec."""
         return dm_specs.BoundedArray(shape=(self.num_states,),
                                      dtype=np.int,
                                      name="actions",
                                      minimum=0, maximum=self.max_moves)
 
-    def action_spec(self) -> dm_specs.DiscreteArray:
-        """Returns the action spec."""
+    def action_spec_vec(self) -> dm_specs.DiscreteArray:
+        """Returns the encoded action spec."""
         return dm_specs.DiscreteArray(self.max_moves,
                                       dtype=np.int,
                                       name="action")
 
-    def reward_spec_vec(self) -> dm_specs.Array:
-        """Returns the vectorized reward spec."""
+    def reward_spec_vec_batch(self) -> dm_specs.Array:
+        """Returns the vectorized encoded reward spec."""
         return dm_specs.Array(shape=(self.num_states,), dtype=float, name="reward")
 
-    def reward_spec(self) -> dm_specs.Array:
-        """Returns the reward spec."""
+    def reward_spec_vec(self) -> dm_specs.Array:
+        """Returns the encoded reward spec."""
         return dm_specs.Array(shape=(), dtype=float, name="reward")
