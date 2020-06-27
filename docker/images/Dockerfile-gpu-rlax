@@ -1,14 +1,22 @@
 FROM alpine/git as hanabi-fetch
 
 RUN mkdir /dm-tools && \
-    git clone https://github.com/deepmind/hanabi-learning-environment.git /dm-tools/hanabi-learning-environment && \
-    git clone https://github.com/deepmind/dm_env /dm-tools/dm-env && \
-    git clone https://github.com/deepmind/dm-haiku /dm-tools/dm-haiku && \
-    git clone https://github.com/deepmind/rlax.git /dm-tools/rlax && \
+    # git clone https://github.com/deepmind/hanabi-learning-environment.git /dm-tools/hanabi-learning-environment && \
+    git clone https://github.com/deepmind/dm_env.git --depth 1 /dm-tools/dm-env && \
+    git clone https://github.com/deepmind/dm-haiku.git --depth 1 /dm-tools/dm-haiku && \
+    git clone https://github.com/deepmind/rlax.git --depth 1 /dm-tools/rlax && \
+    mkdir /hanabi && \
+    git clone https://github.com/braintimeException/hanabi-learning-environment.git --recurse-submodules --branch pybind11 --depth 1 /hanabi/le && \
+    git clone https://github.com/braintimeException/hanabi-multiagent-framework.git --branch pybind-env --depth 1 /hanabi/framework && \
+    git clone https://github.com/braintimeException/hanabi-agents.git --recurse-submodules --depth 1 /hanabi/agents && \
     wget -O /dm-tools/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 
 FROM nvidia/cuda:10.1-cudnn7-devel
+
+RUN apt-get update && apt-get install -y cmake git && rm -rf /var/lib/apt/lists/*
+
 COPY --from=hanabi-fetch /dm-tools /dm-tools/
+COPY --from=hanabi-fetch /hanabi /hanabi/
 
 # conda
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
@@ -22,16 +30,14 @@ RUN /bin/bash /dm-tools/miniconda.sh -b -p /opt/conda && \
     find /opt/conda/ -follow -type f -name '*.a' -delete && \
     find /opt/conda/ -follow -type f -name '*.js.map' -delete && \
     /opt/conda/bin/conda clean -afy && \
-    pip install --upgrade pip
-
-RUN cd /dm-tools && ls -lah && \
-    cd hanabi-learning-environment && pip install . && cd .. && \
-    cd dm-env                      && pip install . && cd .. && \
-    cd dm-haiku                    && pip install . && cd .. && \
-    cd rlax                        && pip install . && cd ..
-
-ADD install_jax.sh /
-RUN sh /install_jax.sh && \
-    rm -rf /dm-tools
+    pip install --upgrade pip && \
+    pip install pyyaml gin-config && \
+    # install jaxlib
+    pip install --upgrade https://storage.googleapis.com/jax-releases/cuda101/jaxlib-0.1.50-cp37-none-manylinux2010_x86_64.whl && \
+    # install deepmind dependencies
+    pip install /dm-tools/dm-env dm-tools/dm-haiku dm-tools/rlax && \
+    # install hanabi
+    pip install /hanabi/le hanabi/framework hanabi/agents && \
+    rm -rf dm-tools hanabi
 
 CMD [ "/bin/bash" ]
