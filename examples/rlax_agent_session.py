@@ -100,7 +100,7 @@ def main(
     mean_reward = parallel_eval_session.run_eval(
         dest=os.path.join(
             output_dir,
-            "stats", "0.npy")
+            "stats", "0")
         ).mean()
     if self_play:
         agents[0].save_weights(
@@ -130,7 +130,7 @@ def main(
         mean_reward = parallel_eval_session.run_eval(
             dest=os.path.join(
                 output_dir,
-                "stats", str(i + 1) + ".npy")
+                "stats", str(i + 1))
             ).mean()
         if self_play:
             agents[0].save_weights(

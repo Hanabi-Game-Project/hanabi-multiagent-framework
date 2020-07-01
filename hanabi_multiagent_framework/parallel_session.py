@@ -102,7 +102,8 @@ class HanabiParallelSession:
         if print_intermediate:
             eval_pretty_print(step_rewards, total_reward)
         if dest is not None:
-            np.save(dest, step_rewards)
+            np.save(dest + "_step_rewards.npy", step_rewards)
+            np.save(dest + "_total_rewards.npy", total_reward)
         return total_reward
 
     def run(self, n_steps: int):
