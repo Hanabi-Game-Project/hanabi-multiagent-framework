@@ -66,7 +66,7 @@ class HanabiParallelSession:
         self.agent_cum_rewards = np.zeros((len(self.agents), self.n_states, 1))
         self.agent_contiguous_states = np.full((len(self.agents), self.n_states), True)
 
-    def run_eval(self, print_intermediate: bool = True) -> np.ndarray:
+    def run_eval(self, dest: str = None, print_intermediate: bool = True) -> np.ndarray:
         """Run each state until the end and return the final scores.
         Args:
             print_intermediate -- Flag indicating whether each step of evaluation should be printed.
@@ -101,6 +101,8 @@ class HanabiParallelSession:
 
         if print_intermediate:
             eval_pretty_print(step_rewards, total_reward)
+        if dest is not None:
+            np.save(dest, step_rewards)
         return total_reward
 
     def run(self, n_steps: int):
