@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import gin
 import hanabi_multiagent_framework as hmf
@@ -16,7 +17,13 @@ def main(
         epochs=1_000_000,
         eval_n_parallel=1_000,
         eval_freq=500,
+        output_dir="/output"
     ):
+
+    os.makedirs(os.path.join(output_dir, "weights"))
+    os.makedirs(os.path.join(output_dir, "stats"))
+    for i in range(n_players):
+        os.makedirs(os.path.join(output_dir, "weights", "agent_" + str(i)))
 
     def create_exp_decay_scheduler(val_start, val_min, inflection1, inflection2):
         def scheduler(step):
@@ -66,7 +73,7 @@ def main(
 
         agents = [self_play_agent for _ in range(n_players)]
     else:
-        agents = [DQNAgent(env.observation_spec_vec()[0], env.action_spec(),
+        agents = [DQNAgent(env.observation_spec_vec_batch()[0], env.action_spec_vec(),
                            agent_params) for _ in range(n_players)]
 
     parallel_session = hmf.HanabiParallelSession(env, agents)
@@ -77,7 +84,9 @@ def main(
     print("Game config", parallel_session.parallel_env.game_config)
 
     # eval before
-    parallel_eval_session.run_eval()
+    mean_reward_prev = 0
+    mean_reward = parallel_eval_session.run_eval().mean()
+
     # train
     parallel_session.train(
         n_iter=eval_freq,
@@ -87,7 +96,27 @@ def main(
 
     print("step", 1 * eval_freq * n_train_steps)
     # eval
-    parallel_eval_session.run_eval()
+    mean_reward_prev = mean_reward
+    mean_reward = parallel_eval_session.run_eval(
+        dest=os.path.join(
+            output_dir,
+            "stats", "0.npy")
+        ).mean()
+    if self_play:
+        agents[0].save_weights(
+            os.path.join(output_dir, "weights", "agent_0"), "ckpt")
+    else:
+        for aid, agent in enumerate(agents):
+            agent.save_weights(
+                os.path.join(output_dir, "weights", "agent_" + str(aid)), "ckpt")
+    if mean_reward_prev < mean_reward:
+        if self_play:
+            agents[0].save_weights(
+                os.path.join(output_dir, "weights", "agent_0"), "best")
+        else:
+            for aid, agent in enumerate(agents):
+                agent.save_weights(
+                    os.path.join(output_dir, "weights", "agent_" + str(aid)), "best")
 
     for i in range(epochs):
         parallel_session.train(
@@ -97,7 +126,27 @@ def main(
             n_warmup=0)
         print("step", (i + 2) * eval_freq * n_train_steps)
         # eval after
-        parallel_eval_session.run_eval()
+        mean_reward_prev = mean_reward
+        mean_reward = parallel_eval_session.run_eval(
+            dest=os.path.join(
+                output_dir,
+                "stats", str(i + 1) + ".npy")
+            ).mean()
+        if self_play:
+            agents[0].save_weights(
+                os.path.join(output_dir, "weights", "agent_0"), "ckpt")
+        else:
+            for aid, agent in enumerate(agents):
+                agent.save_weights(
+                    os.path.join(output_dir, "weights", "agent_" + str(aid)), "ckpt")
+        if mean_reward_prev < mean_reward:
+            if self_play:
+                agents[0].save_weights(
+                    os.path.join(output_dir, "weights", "agent_0"), "best")
+            else:
+                for aid, agent in enumerate(agents):
+                    agent.save_weights(
+                        os.path.join(output_dir, "weights", "agent_" + str(aid)), "best")
 
 if __name__ == "__main__":
     import argparse
@@ -114,7 +163,7 @@ if __name__ == "__main__":
         "--n_parallel", type=int, default=32,
         help="Number of games run in parallel during training.")
     parser.add_argument(
-        "--self_play", type=bool, default=True,
+        "--self_play", default=False, action='store_true',
         help="Whether the agent should play with itself, or an independent agent instance should be created for each player.")
     parser.add_argument(
         "--n_train_steps", type=int, default=4,
@@ -135,6 +184,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--agent_config_path", type=str, default=None,
         help="Path to gin config file for rlax rainbow agent.")
+
+    parser.add_argument(
+        "--output_dir", type=str, default="/output",
+        help="Destination for storing weights and statistics")
 
     args = parser.parse_args()
 

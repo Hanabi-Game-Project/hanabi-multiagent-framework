@@ -1,13 +1,13 @@
-RlaxRainbowParams.train_batch_size       = 512
+RlaxRainbowParams.train_batch_size       = 32
 RlaxRainbowParams.target_update_period   = 500
 RlaxRainbowParams.discount               = 0.99
-RlaxRainbowParams.epsilon                = 0.2
+RlaxRainbowParams.epsilon                = 0.0
 RlaxRainbowParams.learning_rate          = 2.5e-5
 RlaxRainbowParams.layers                 = [512, 512]
 RlaxRainbowParams.use_double_q           = True
 RlaxRainbowParams.use_priority           = True
 RlaxRainbowParams.experience_buffer_size = 65536
-RlaxRainbowParams.seed                   = 1234
+RlaxRainbowParams.seed                   = 42
 RlaxRainbowParams.n_atoms                = 51
 RlaxRainbowParams.atom_vmax              = 25
 RlaxRainbowParams.beta_is                = 0.2
