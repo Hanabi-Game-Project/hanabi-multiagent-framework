@@ -17,7 +17,8 @@ def main(
         epochs=1_000_000,
         eval_n_parallel=1_000,
         eval_freq=500,
-        output_dir="/output"
+        output_dir="/output",
+        start_with_weights=None
     ):
 
     os.makedirs(os.path.join(output_dir, "weights"))
@@ -76,6 +77,11 @@ def main(
         agents = [DQNAgent(env.observation_spec_vec_batch()[0], env.action_spec_vec(),
                            agent_params) for _ in range(n_players)]
 
+    if start_with_weights is not None:
+        print(start_with_weights)
+        for aid, agent in enumerate(agents):
+            if "agent_" + str(aid) in start_with_weights:
+                agent.restore_weights(*(start_with_weights["agent_" + str(aid)]))
     parallel_session = hmf.HanabiParallelSession(env, agents)
     parallel_session.reset()
 
@@ -104,11 +110,11 @@ def main(
         ).mean()
     if self_play:
         agents[0].save_weights(
-            os.path.join(output_dir, "weights", "agent_0"), "ckpt")
+            os.path.join(output_dir, "weights", "agent_0"), "ckpt_" + str(agents[0].train_step))
     else:
         for aid, agent in enumerate(agents):
             agent.save_weights(
-                os.path.join(output_dir, "weights", "agent_" + str(aid)), "ckpt")
+                os.path.join(output_dir, "weights", "agent_" + str(aid)), "ckpt_" + str(agents[0].train_step))
     if mean_reward_prev < mean_reward:
         if self_play:
             agents[0].save_weights(
@@ -118,27 +124,28 @@ def main(
                 agent.save_weights(
                     os.path.join(output_dir, "weights", "agent_" + str(aid)), "best")
 
-    for i in range(epochs):
+    for epoch in range(epochs):
         parallel_session.train(
             n_iter=eval_freq,
             n_sim_steps=n_sim_steps,
             n_train_steps=n_train_steps,
             n_warmup=0)
-        print("step", (i + 2) * eval_freq * n_train_steps)
+        print("step", (epoch + 2) * eval_freq * n_train_steps)
         # eval after
         mean_reward_prev = mean_reward
         mean_reward = parallel_eval_session.run_eval(
             dest=os.path.join(
                 output_dir,
-                "stats", str(i + 1))
+                "stats", str(epoch + 1))
             ).mean()
-        if self_play:
-            agents[0].save_weights(
-                os.path.join(output_dir, "weights", "agent_0"), "ckpt")
-        else:
-            for aid, agent in enumerate(agents):
-                agent.save_weights(
-                    os.path.join(output_dir, "weights", "agent_" + str(aid)), "ckpt")
+        if epoch % (100_000 // eval_freq) == 0:
+            if self_play:
+                agents[0].save_weights(
+                    os.path.join(output_dir, "weights", "agent_0"), "ckpt_" + str(agents[0].train_step))
+            else:
+                for aid, agent in enumerate(agents):
+                    agent.save_weights(
+                        os.path.join(output_dir, "weights", "agent_" + str(aid)), "ckpt_" + str(agents[0].train_step))
         if mean_reward_prev < mean_reward:
             if self_play:
                 agents[0].save_weights(
@@ -150,6 +157,7 @@ def main(
 
 if __name__ == "__main__":
     import argparse
+    import json
     parser = argparse.ArgumentParser(description="Train a dm-rlax based rainbow agent.")
 
     parser.add_argument(
@@ -188,6 +196,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir", type=str, default="/output",
         help="Destination for storing weights and statistics")
+
+    parser.add_argument(
+        "--start_with_weights", type=json.loads, default=None,
+        help="Initialize the agents with the specified weights before training. Syntax: {\"agent_0\" : [\"path/to/weights/1\", ...], ...}")
 
     args = parser.parse_args()
 
