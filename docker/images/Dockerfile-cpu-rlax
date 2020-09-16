@@ -11,9 +11,9 @@ RUN mkdir /dm-tools && \
     git clone https://github.com/braintimeException/hanabi-agents.git --recurse-submodules --depth 1 /hanabi/agents && \
     wget -O /dm-tools/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 
-FROM nvidia/cuda:10.1-cudnn7-devel
+FROM ubuntu:18.04
 
-RUN apt-get update && apt-get install -y cmake git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y build-essential cmake git && rm -rf /var/lib/apt/lists/*
 
 COPY --from=hanabi-fetch /dm-tools /dm-tools/
 COPY --from=hanabi-fetch /hanabi /hanabi/
@@ -32,8 +32,6 @@ RUN /bin/bash /dm-tools/miniconda.sh -b -p /opt/conda && \
     /opt/conda/bin/conda clean -afy && \
     pip install --upgrade pip && \
     pip install pyyaml gin-config && \
-    # install cuda version of jaxlib
-    pip install --upgrade https://storage.googleapis.com/jax-releases/cuda101/jaxlib-$(pip search jaxlib | sed "s/.*(//" | sed "s/).*//")-$(python -V | awk '{split($2,a,"."); print "cp" a[1] a[2]}')-none-manylinux2010_x86_64.whl && \
     # install deepmind dependencies
     pip install /dm-tools/dm-env dm-tools/dm-haiku dm-tools/rlax && \
     # install hanabi
