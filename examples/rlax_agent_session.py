@@ -41,7 +41,7 @@ def main(
             return min(val_end, val_start + step * interscept)
         return scheduler
 
-    eps_schedule = create_exp_decay_scheduler(0.5, 0.01, 200_000, 2_000_000)
+    eps_schedule = create_exp_decay_scheduler(0.5, 0.01, 12000, 20000)
     beta_is_schedule = create_linear_scheduler(0.0, 1.0, 25e-7 / 4)
 
     #  env_conf = make_hanabi_env_config('Hanabi-Full-Oracle', n_players)
@@ -49,6 +49,7 @@ def main(
     #  env_conf = make_hanabi_env_config('Hanabi-Small-Oracle', n_players)
     #  env_conf = make_hanabi_env_config('Hanabi-Small-CardKnowledge', n_players)
     env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
+    
     if max_life_tokens is not None:
         env_conf["max_life_tokens"] = str(max_life_tokens)
 
@@ -57,6 +58,8 @@ def main(
 
     if agent_config_path is not None:
         gin.parse_config_file(agent_config_path)
+
+
     agent_params = RlaxRainbowParams(
             #  train_batch_size=512,
             #  target_update_period=500,
@@ -64,8 +67,11 @@ def main(
             #  epsilon=lambda x: 0.2,
             #  beta_is=lambda x: 0.2,
             #  layers=[512, 512]
-            )
-
+    )
+    
+    
+    print('params', agent_params)
+    
     if self_play:
         self_play_agent = DQNAgent(
             env.observation_spec_vec_batch()[0],
@@ -90,8 +96,8 @@ def main(
     print("Game config", parallel_session.parallel_env.game_config)
 
     # eval before
-    mean_reward_prev = 0
-    mean_reward = parallel_eval_session.run_eval().mean()
+    mean_reward_prev = parallel_eval_session.run_eval().mean()
+    #mean_reward = parallel_eval_session.run_eval().mean()
 
     # train
     parallel_session.train(
@@ -102,7 +108,7 @@ def main(
 
     print("step", 1 * eval_freq * n_train_steps)
     # eval
-    mean_reward_prev = mean_reward
+    #mean_reward_prev = mean_reward
     mean_reward = parallel_eval_session.run_eval(
         dest=os.path.join(
             output_dir,
@@ -123,6 +129,8 @@ def main(
             for aid, agent in enumerate(agents):
                 agent.save_weights(
                     os.path.join(output_dir, "weights", "agent_" + str(aid)), "best")
+                
+        mean_reward_prev = mean_reward
 
     for epoch in range(epochs):
         parallel_session.train(
@@ -132,20 +140,23 @@ def main(
             n_warmup=0)
         print("step", (epoch + 2) * eval_freq * n_train_steps)
         # eval after
-        mean_reward_prev = mean_reward
+        #mean_reward_prev = mean_reward
         mean_reward = parallel_eval_session.run_eval(
             dest=os.path.join(
                 output_dir,
                 "stats", str(epoch + 1))
             ).mean()
-        if epoch % (100_000 // eval_freq) == 0:
-            if self_play:
-                agents[0].save_weights(
-                    os.path.join(output_dir, "weights", "agent_0"), "ckpt_" + str(agents[0].train_step))
-            else:
-                for aid, agent in enumerate(agents):
-                    agent.save_weights(
-                        os.path.join(output_dir, "weights", "agent_" + str(aid)), "ckpt_" + str(agents[0].train_step))
+            
+        # TODO check how it is done
+        #if epoch % (100_000 // eval_freq) == 0:
+        if self_play:
+            agents[0].save_weights(
+                os.path.join(output_dir, "weights", "agent_0"), "ckpt_" + str(agents[0].train_step))
+        else:
+            for aid, agent in enumerate(agents):
+                agent.save_weights(
+                    os.path.join(output_dir, "weights", "agent_" + str(aid)), "ckpt_" + str(agents[0].train_step))
+        
         if mean_reward_prev < mean_reward:
             if self_play:
                 agents[0].save_weights(
@@ -154,6 +165,8 @@ def main(
                 for aid, agent in enumerate(agents):
                     agent.save_weights(
                         os.path.join(output_dir, "weights", "agent_" + str(aid)), "best")
+                    
+            mean_reward_prev = mean_reward
 
 if __name__ == "__main__":
     import argparse
