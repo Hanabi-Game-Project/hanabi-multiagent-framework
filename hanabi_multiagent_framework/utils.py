@@ -72,7 +72,7 @@ def make_hanabi_env_config(
     elif environment_name in ["Hanabi-Small", "Hanabi-Small-CardKnowledge"]:
         config = {
             "colors":
-                2,
+                3,
             "ranks":
                 5,
             "players":
@@ -89,7 +89,7 @@ def make_hanabi_env_config(
     elif environment_name == "Hanabi-Small-Oracle":
         config = {
             "colors":
-                2,
+                3,
             "ranks":
                 5,
             "players":
