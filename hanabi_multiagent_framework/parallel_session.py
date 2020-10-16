@@ -89,6 +89,9 @@ class HanabiParallelSession:
                     np.nonzero(step_types == StepType.LAST)[0], agent_id)
 
             obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
+            observation_object = obs[0]
+            for o in observation_object:
+                print(o.playable_percent())
             actions = agent.exploit(obs)
 
             self._cur_obs, reward, step_types = \
@@ -131,6 +134,9 @@ class HanabiParallelSession:
             # agent acts
             obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
             actions = agent.explore(obs)
+            
+            # convert actions to HanabiMOve objects
+            moves = self.parallel_env.get_moves(actions)
 
             # apply actions to the states and get new observations, rewards, statuses.
             self._cur_obs, rewards, step_types = self.parallel_env.step(
@@ -142,6 +148,8 @@ class HanabiParallelSession:
             self.agent_cum_rewards[self.agent_contiguous_states] += np.broadcast_to(
                 rewards.reshape((-1, 1)),
                 self.agent_cum_rewards.shape)[self.agent_contiguous_states]
+                
+            # TODO here call reward shaping function
 
             # set the terminal states as not contiguous for all agents
             self.agent_contiguous_states[:, step_types == 2] = False
@@ -184,11 +192,14 @@ class HanabiParallelSession:
             self.run(n_sim_steps)
             for _ in range(n_train_steps):
                 for agent in self.agents.agents:
+                    #print(repr(agent))
                     agent.update()
+                    
 
     def preprocess_obs_for_agent(self, obs, agent):
         if agent.requires_vectorized_observation():
             vobs = np.array(self.parallel_env._parallel_env.encoded_observations)
+            #print(vobs)
             vlms = np.array(self.parallel_env._parallel_env.encoded_legal_moves)
             return (obs, (vobs, vlms))
         return obs

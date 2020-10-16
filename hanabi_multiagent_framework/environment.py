@@ -123,6 +123,10 @@ class HanabiParallelEnvironment:
         self.last_observation = self._parallel_env.observe_agent(0)
         self.step_types = np.full((self.num_states,), StepType.FIRST)
         return self.last_observation
+    
+    def get_moves(self, uids):
+        """convert uids to hanabi move objects"""
+        return self._parallel_env.get_moves(uids)
 
     @property
     def max_moves(self):
