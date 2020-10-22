@@ -7,12 +7,12 @@ from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams
 
 def main(
         agent_config_path=None,
-        hanabi_game_type="Hanabi-Small-Oracle",
+        hanabi_game_type="Hanabi-Small",
         n_players=2,
         max_life_tokens=None,
         n_parallel=64,
         self_play=True,
-        n_train_steps=5,
+        n_train_steps=4,
         n_sim_steps=2,
         epochs=1_000_000,
         eval_n_parallel=1_000,
@@ -47,8 +47,8 @@ def main(
     #  env_conf = make_hanabi_env_config('Hanabi-Full-Oracle', n_players)
     #  env_conf = make_hanabi_env_config('Hanabi-Full-CardKnowledge', n_players)
     #  env_conf = make_hanabi_env_config('Hanabi-Small-Oracle', n_players)
-    #  env_conf = make_hanabi_env_config('Hanabi-Small-CardKnowledge', n_players)
-    env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
+    env_conf = make_hanabi_env_config('Hanabi-Small-CardKnowledge', n_players)
+    #env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
     
     if max_life_tokens is not None:
         env_conf["max_life_tokens"] = str(max_life_tokens)

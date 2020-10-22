@@ -11,6 +11,10 @@ from .agent import HanabiAgent
 from .environment import HanabiParallelEnvironment
 from .experience_buffer import ExperienceBuffer
 from .utils import eval_pretty_print
+from hanabi_agents.rlax_dqn import RewardShaper
+from _cffi_backend import typeof
+import timeit
+from hanabi_learning_environment import pyhanabi_pybind as pyhanabi
 
 class HanabiParallelSession:
     """
@@ -75,6 +79,10 @@ class HanabiParallelSession:
         print("Agents", self.agents.agents)
         #  print("Running evaluation")
         total_reward = np.zeros((self.n_states,))
+        total_play_moves = np.zeros((self.n_states,))
+        total_discard_moves = np.zeros((self.n_states,))
+        total_reveal_moves = np.zeros((self.n_states,))
+        total_risky_moves = np.zeros((self.n_states,))
         step_rewards = []
         step_types = self.parallel_env.step_types
 
@@ -89,14 +97,31 @@ class HanabiParallelSession:
                     np.nonzero(step_types == StepType.LAST)[0], agent_id)
 
             obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
-            observation_object = obs[0]
-            for o in observation_object:
-                print(o.playable_percent())
             actions = agent.exploit(obs)
 
             self._cur_obs, reward, step_types = \
                     self.parallel_env.step(actions, agent_id)
+                    
+            # convert moves
+            moves = self.parallel_env.get_moves(actions)
+            play_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kPlay else 0 
+                          for m in moves]
+#             discard_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kDiscard else 0 
+#                              for m in moves]
+#             reveal_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kRevealColor or 
+#                             m.move_type == pyhanabi.HanabiMove.Type.kRevealRank else 0 
+#                             for m in moves]
+                        
+            # get shaped rewards
+            reward_shaping = agent.shape_rewards(obs, moves)
+            risky_moves = reward_shaping < 0
+                                
             total_reward[valid_states] += reward[valid_states]
+            total_play_moves[valid_states] += np.array(play_moves)[valid_states]
+#             total_discard_moves[valid_states] += np.array(discard_moves)[valid_states]
+#             total_reveal_moves[valid_states] += np.array(reveal_moves)[valid_states]
+            total_risky_moves[valid_states] += risky_moves[valid_states]
+                        
             done = np.logical_or(done, step_types == StepType.LAST)
             if print_intermediate:
                 step_rewards.append({"terminated": np.sum(done), "rewards" : reward[valid_states]})
@@ -107,6 +132,7 @@ class HanabiParallelSession:
         if dest is not None:
             np.save(dest + "_step_rewards.npy", step_rewards)
             np.save(dest + "_total_rewards.npy", total_reward)
+            np.save(dest + "_move_eval.npy", (total_play_moves, total_risky_moves))
         return total_reward
 
     def run(self, n_steps: int):
@@ -137,11 +163,11 @@ class HanabiParallelSession:
             
             # convert actions to HanabiMOve objects
             moves = self.parallel_env.get_moves(actions)
-
+            
             # apply actions to the states and get new observations, rewards, statuses.
             self._cur_obs, rewards, step_types = self.parallel_env.step(
                 actions, agent_id)
-
+            
             # reward is cumulative over the course of the whole round.
             # i.e. the agents gets a reward for his action as well as for the
             # actions of its co-players.
@@ -149,19 +175,21 @@ class HanabiParallelSession:
                 rewards.reshape((-1, 1)),
                 self.agent_cum_rewards.shape)[self.agent_contiguous_states]
                 
-            # TODO here call reward shaping function
-
             # set the terminal states as not contiguous for all agents
             self.agent_contiguous_states[:, step_types == 2] = False
             # reset contigency of all states for current agent
             self.agent_contiguous_states[agent_id, :] = True
-
+            
+            # call reward shaping function
+            add_rewards = agent.shape_rewards(obs, moves).reshape(-1, 1)
+            shaped_rewards = self.agent_cum_rewards[agent_id] + add_rewards
+            
             # add new experiences to the agent
             obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
             agent.add_experience(
                 obs,
                 actions,
-                self.agent_cum_rewards[agent_id],
+                shaped_rewards,#self.agent_cum_rewards[agent_id] + add,
                 step_types)
 
             # reset the cumulative reward for the current agent

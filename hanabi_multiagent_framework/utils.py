@@ -78,7 +78,7 @@ def make_hanabi_env_config(
             "players":
                 num_players,
             "hand_size":
-                2,
+                3,
             "max_information_tokens":
                 3,
             "max_life_tokens":
@@ -95,7 +95,7 @@ def make_hanabi_env_config(
             "players":
                 num_players,
             "hand_size":
-                2,
+                3,
             "max_information_tokens":
                 3,
             "max_life_tokens":
