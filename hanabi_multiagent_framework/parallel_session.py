@@ -84,6 +84,7 @@ class HanabiParallelSession:
         total_reveal_moves = np.zeros((self.n_states,))
         total_risky_moves = np.zeros((self.n_states,))
         step_rewards = []
+        playability = [[] for i in range(self.n_states)]
         step_types = self.parallel_env.step_types
 
         step = 0
@@ -99,18 +100,31 @@ class HanabiParallelSession:
             obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
             actions = agent.exploit(obs)
 
+            moves = self.parallel_env.get_moves(actions)
+            
+            # playability
+            counter = 0
+            for o, m in zip(self._cur_obs, moves):
+                if m.move_type == pyhanabi.HanabiMove.Type.kPlay and valid_states[counter]:
+                    try:
+                        playability[counter].append(o.playable_percent()[m.card_index])
+                    except IndexError:
+                        pass
+                counter += 1
+
+            # get new observation based on action
             self._cur_obs, reward, step_types = \
                     self.parallel_env.step(actions, agent_id)
-                    
+
             # convert moves
             moves = self.parallel_env.get_moves(actions)
             play_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kPlay else 0 
                           for m in moves]
-#             discard_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kDiscard else 0 
-#                              for m in moves]
-#             reveal_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kRevealColor or 
-#                             m.move_type == pyhanabi.HanabiMove.Type.kRevealRank else 0 
-#                             for m in moves]
+            discard_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kDiscard else 0 
+                             for m in moves]
+            reveal_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kRevealColor or 
+                            m.move_type == pyhanabi.HanabiMove.Type.kRevealRank else 0 
+                            for m in moves]
                         
             # get shaped rewards
             reward_shaping = agent.shape_rewards(obs, moves)
@@ -118,21 +132,31 @@ class HanabiParallelSession:
                                 
             total_reward[valid_states] += reward[valid_states]
             total_play_moves[valid_states] += np.array(play_moves)[valid_states]
-#             total_discard_moves[valid_states] += np.array(discard_moves)[valid_states]
-#             total_reveal_moves[valid_states] += np.array(reveal_moves)[valid_states]
+            total_discard_moves[valid_states] += np.array(discard_moves)[valid_states]
+            total_reveal_moves[valid_states] += np.array(reveal_moves)[valid_states]
             total_risky_moves[valid_states] += risky_moves[valid_states]
                         
             done = np.logical_or(done, step_types == StepType.LAST)
             if print_intermediate:
-                step_rewards.append({"terminated": np.sum(done), "rewards" : reward[valid_states]})
+                step_rewards.append({"terminated": np.sum(done), 
+                    "risky": np.sum(risky_moves[valid_states]), 
+                    "play": np.sum(np.array(play_moves)[valid_states]),
+                    "discard": np.sum(np.array(discard_moves)[valid_states]),
+                    "reveal": np.sum(np.array(reveal_moves)[valid_states]),
+                    "rewards" : reward[valid_states]})
             step += 1
 
         if print_intermediate:
             eval_pretty_print(step_rewards, total_reward)
+            print(playability[:2])
         if dest is not None:
             np.save(dest + "_step_rewards.npy", step_rewards)
             np.save(dest + "_total_rewards.npy", total_reward)
-            np.save(dest + "_move_eval.npy", (total_play_moves, total_risky_moves))
+            np.save(dest + "_move_eval.npy", {"play": total_play_moves, 
+                "risky": total_risky_moves, 
+                "discard": total_discard_moves, 
+                "reveal": total_reveal_moves,
+                "playability": playability})
         return total_reward
 
     def run(self, n_steps: int):
