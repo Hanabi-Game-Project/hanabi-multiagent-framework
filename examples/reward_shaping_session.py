@@ -5,6 +5,8 @@ import hanabi_multiagent_framework as hmf
 from hanabi_multiagent_framework.utils import make_hanabi_env_config
 from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams
 from hanabi_agents.rlax_dqn import RewardShapingParams, RewardShaper
+import logging
+import time
 
 
 def load_agent(env):
@@ -39,13 +41,23 @@ def main(
     os.makedirs(os.path.join(output_dir, "stats"))
     for i in range(n_players):
         os.makedirs(os.path.join(output_dir, "weights", "agent_" + str(i)))
-        
+    
+    #logger
+    logger = logging.getLogger('Training_Log')
+    logger.setLevel(logging.DEBUG)
+    fh = logging.FileHandler(os.path.join(output_dir, 'debug.log'))
+    fh.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(message)s')
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+
     # create hanabi environment configuration
     env_conf = make_hanabi_env_config('Hanabi-Small-CardKnowledge', n_players)
     #env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
     
     if max_life_tokens is not None:
             env_conf["max_life_tokens"] = str(max_life_tokens)
+    logger.info('Game Config\n' + str(env_conf))
             
     # create training and evaluation parallel environment
     env = hmf.HanabiParallelEnvironment(env_conf, n_parallel)
@@ -62,6 +74,8 @@ def main(
             
             agent = load_agent(env)
             agents = [agent for _ in range(n_players)]
+            logger.info("self play")
+            logger.info("Agent Config\n" + str(agent))
     
     else:
         
@@ -85,6 +99,9 @@ def main(
     
     # calculate warmup period
     n_warmup = int(350 * n_players / n_parallel)
+
+    # start time
+    start_time = time.time()
     
     # start training
     for epoch in range(epochs):
@@ -105,9 +122,9 @@ def main(
         mean_reward = parallel_eval_session.run_eval(
             dest=os.path.join(output_dir, "stats", str(epoch))
             ).mean()
-        
+
         # compare to previous iteration and store checkpoints
-        if epoch % 100:
+        if epoch % 100 == 0:
             
             if self_play:
                 agents[0].save_weights(
@@ -133,6 +150,11 @@ def main(
                         os.path.join(output_dir, "weights", "agent_" + str(aid)), "best") 
                     
             mean_reward_prev = mean_reward
+
+        # logging
+        logger.info("epoch {}: duration={}s    reward={}".format(epoch, time.time()-start_time, mean_reward))
+        start_time = time.time()
+
             
 
 if __name__ == "__main__":
