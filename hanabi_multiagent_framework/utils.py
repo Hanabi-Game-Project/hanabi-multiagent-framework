@@ -80,9 +80,9 @@ def make_hanabi_env_config(
             "hand_size":
                 3,
             "max_information_tokens":
-                3,
+                5,
             "max_life_tokens":
-                1,
+                2,
             "observation_type":
                 pyhanabi.AgentObservationType.CARD_KNOWLEDGE.value
         }
@@ -97,9 +97,9 @@ def make_hanabi_env_config(
             "hand_size":
                 3,
             "max_information_tokens":
-                3,
+                5,
             "max_life_tokens":
-                1,
+                2,
             "observation_type":
                 pyhanabi.AgentObservationType.SEER.value
         }
