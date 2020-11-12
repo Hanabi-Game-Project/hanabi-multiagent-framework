@@ -1,16 +1,31 @@
+# defining the session
+session.n_parallel = 1
+session.n_parallel_eval = 1000
+session.epochs = 3500
+
+# define schedule for annealing of beta_is
+schedule_beta_is.value_start = 0.4
+schedule_beta_is.value_end = 1
+schedule_beta_is.epochs = 3500
+
+# define the agent parameters
 agent_0/RlaxRainbowParams.train_batch_size       = 32
 agent_0/RlaxRainbowParams.target_update_period   = 500
 agent_0/RlaxRainbowParams.discount               = 0.99
 agent_0/RlaxRainbowParams.epsilon                = 0.0
-agent_0/RlaxRainbowParams.learning_rate          = 1e-4
+agent_0/RlaxRainbowParams.learning_rate          = 2.5e-4
 agent_0/RlaxRainbowParams.layers                 = [512, 512]
 agent_0/RlaxRainbowParams.use_double_q           = True
 agent_0/RlaxRainbowParams.use_priority           = True
 agent_0/RlaxRainbowParams.experience_buffer_size = 65536
 agent_0/RlaxRainbowParams.seed                   = 42
-agent_0/RlaxRainbowParams.n_atoms                = 50
-agent_0/RlaxRainbowParams.atom_vmax              = 20
-agent_0/RlaxRainbowParams.beta_is                = 0.4
+agent_0/RlaxRainbowParams.n_atoms                = 31 # for hanabi small
+agent_0/RlaxRainbowParams.atom_vmax              = 15 # for hanabi small
+agent_0/RlaxRainbowParams.beta_is                = @schedule_beta_is()
+agent_0/RlaxRainbowParams.priority_w			 = 0.6
+agent_0/RlaxRainbowParams.history_size           = 1
 
-agent_0/RewardShapingParams.min_play_probability = 0.7
-agent_0/RewardShapingParams.w_play_probability	 = -0.2
+# define the parameters for the agents reward schaping
+agent_0/RewardShapingParams.min_play_probability = 0
+agent_0/RewardShapingParams.w_play_probability	 = 0
+

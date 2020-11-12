@@ -15,27 +15,31 @@ def load_agent(env):
     reward_shaper = RewardShaper(reward_shaping_params)
     
     agent_params = RlaxRainbowParams()
+    print(agent_params)
     return DQNAgent(env.observation_spec_vec_batch()[0],
                     env.action_spec_vec(),
                     agent_params,
                     reward_shaper)
 
 
-def main(
-        agent_config_path=None,
-        hanabi_game_type="Hanabi-Small",
-        n_players=2,
-        max_life_tokens=None,
-        n_parallel=64,
-        self_play=True,
-        n_train_steps=4,
-        n_sim_steps=2,
-        epochs=1_000_000,
-        eval_n_parallel=1_000,
-        eval_freq=500,
-        output_dir="/output",
+@gin.configurable(blacklist=['output_dir', 'self_play'])
+def session(
+            #agent_config_path=None,
+            hanabi_game_type="Hanabi-Small",
+            n_players: int = 2,
+            max_life_tokens: int = None,
+            n_parallel: int = 32,
+            n_parallel_eval:int = 1_000,
+            n_train_steps: int = 4,
+            n_sim_steps: int = 2,
+            epochs: int = 1_000_000,
+            eval_freq: int = 500,
+            self_play: bool = True,
+            output_dir = "/output",
     ):
-
+    
+    print(epochs, n_parallel, n_parallel_eval)
+    
     # create folder structure
     os.makedirs(os.path.join(output_dir, "weights"))
     os.makedirs(os.path.join(output_dir, "stats"))
@@ -52,8 +56,8 @@ def main(
     logger.addHandler(fh)
 
     # create hanabi environment configuration
-    env_conf = make_hanabi_env_config('Hanabi-Small-CardKnowledge', n_players)
-    #env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
+    # env_conf = make_hanabi_env_config('Hanabi-Small-CardKnowledge', n_players)
+    env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
     
     if max_life_tokens is not None:
             env_conf["max_life_tokens"] = str(max_life_tokens)
@@ -61,12 +65,8 @@ def main(
             
     # create training and evaluation parallel environment
     env = hmf.HanabiParallelEnvironment(env_conf, n_parallel)
-    eval_env = hmf.HanabiParallelEnvironment(env_conf, eval_n_parallel)
-    
-    # load configuration from gin file
-    if agent_config_path is not None:
-        gin.parse_config_file(agent_config_path)
-        
+    eval_env = hmf.HanabiParallelEnvironment(env_conf, n_parallel_eval)
+            
     # get agent and reward shaping configurations
     if self_play:
         
@@ -124,7 +124,7 @@ def main(
             ).mean()
 
         # compare to previous iteration and store checkpoints
-        if epoch % 100 == 0:
+        if epoch % 500 == 0:
             
             if self_play:
                 agents[0].save_weights(
@@ -154,43 +154,65 @@ def main(
         # logging
         logger.info("epoch {}: duration={}s    reward={}".format(epoch, time.time()-start_time, mean_reward))
         start_time = time.time()
+        
+        
+def linear_schedule(val_start, val_end, n_epochs):
+    
+    def schedule(step):
+        increase = (val_end - val_start) / n_epochs
+        return min(val_end, val_start + step * increase)
+    
+    return schedule
+
+
+@gin.configurable
+def schedule_beta_is(value_start, value_end, epochs):
+    return linear_schedule(value_start, value_end, epochs)
+        
+  
+def main(args):
+    
+    # load configuration from gin file
+    if args.agent_config_path is not None:
+        gin.parse_config_file(args.agent_config_path)
+    
+    del args.agent_config_path
+    session(**vars(args))
 
             
-
 if __name__ == "__main__":
     import argparse
     import json
     parser = argparse.ArgumentParser(description="Train a dm-rlax based rainbow agent.")
 
-    parser.add_argument(
-        "--hanabi_game_type", type=str, default="Hanabi-Small-Oracle",
-        help='Can be "Hanabi-{VerySmall,Small,Full}-{Oracle,CardKnowledge}"')
-    parser.add_argument("--n_players", type=int, default=2, help="Number of players.")
-    parser.add_argument(
-        "--max_life_tokens", type=int, default=None,
-        help="Set a different number of life tokens.")
-    parser.add_argument(
-        "--n_parallel", type=int, default=32,
-        help="Number of games run in parallel during training.")
+#     parser.add_argument(
+#         "--hanabi_game_type", type=str, default="Hanabi-Small-Oracle",
+#         help='Can be "Hanabi-{VerySmall,Small,Full}-{Oracle,CardKnowledge}"')
+#     parser.add_argument("--n_players", type=int, default=2, help="Number of players.")
+#     parser.add_argument(
+#         "--max_life_tokens", type=int, default=None,
+#         help="Set a different number of life tokens.")
+# #     parser.add_argument(
+# #         "--n_parallel", type=int, default=32,
+# #         help="Number of games run in parallel during training.")
     parser.add_argument(
         "--self_play", default=False, action='store_true',
         help="Whether the agent should play with itself, or an independent agent instance should be created for each player.")
-    parser.add_argument(
-        "--n_train_steps", type=int, default=4,
-        help="Number of training steps made in each iteration. One iteration consists of n_sim_steps followed by n_train_steps.")
-    parser.add_argument(
-        "--n_sim_steps", type=int, default=2,
-        help="Number of environment steps made in each iteration.")
-    parser.add_argument(
-        "--epochs", type=int, default=1_000_000,
-        help="Total number of rotations = epochs * eval_freq.")
-    parser.add_argument(
-        "--eval_n_parallel", type=int, default=1_000,
-        help="Number of parallel games to use for evaluation.")
-    parser.add_argument(
-        "--eval_freq", type=int, default=500,
-        help="Number of iterations to perform between evaluations.")
-
+#     parser.add_argument(
+#         "--n_train_steps", type=int, default=4,
+#         help="Number of training steps made in each iteration. One iteration consists of n_sim_steps followed by n_train_steps.")
+#     parser.add_argument(
+#         "--n_sim_steps", type=int, default=2,
+#         help="Number of environment steps made in each iteration.")
+#     parser.add_argument(
+#         "--epochs", type=int, default=1_000_000,
+#         help="Total number of rotations = epochs * eval_freq.")
+# #     parser.add_argument(
+# #         "--eval_n_parallel", type=int, default=1_000,
+# #         help="Number of parallel games to use for evaluation.")
+#     parser.add_argument(
+#         "--eval_freq", type=int, default=500,
+#         help="Number of iterations to perform between evaluations.")
     parser.add_argument(
         "--agent_config_path", type=str, default=None,
         help="Path to gin config file for rlax rainbow agent.")
@@ -201,6 +223,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    main(**vars(args))           
+    #main(**vars(args))  
+    main(args)         
             
             
