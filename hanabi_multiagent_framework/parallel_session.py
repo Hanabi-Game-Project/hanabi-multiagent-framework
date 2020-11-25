@@ -11,6 +11,10 @@ from .agent import HanabiAgent
 from .environment import HanabiParallelEnvironment
 from .experience_buffer import ExperienceBuffer
 from .utils import eval_pretty_print
+from hanabi_agents.rlax_dqn import RewardShaper
+from _cffi_backend import typeof
+import timeit
+from hanabi_learning_environment import pyhanabi_pybind as pyhanabi
 
 class HanabiParallelSession:
     """
@@ -55,9 +59,20 @@ class HanabiParallelSession:
         self.obs_len = self.parallel_env.observation_len
         self.max_moves = self.parallel_env.max_moves
         self._cur_obs = None
-        self.reset()
+
         # variables to preserve the agents' rewards between runs
         self.agent_cum_rewards, self.agent_terminal_states = None, None
+        
+        # create stacker objects
+        self.stacker = [a.create_stacker(self.obs_len, self.n_states) for a in agents]
+        self.stacker_eval = [a.create_stacker(self.obs_len, self.n_states) for a in agents]
+        
+        # create caches
+        self.last_actions = [None for i in range(self.agents.__len__())]
+        self.last_step_types = [np.zeros((self.n_states)) for i in range(self.agents.__len__())]
+        self.last_observations = [None for i in  range(self.agents.__len__())]
+        
+        self.reset()
 
     def reset(self):
         """Reset the session, i.e. reset the all states and start from agent 0."""
@@ -65,6 +80,8 @@ class HanabiParallelSession:
         self._cur_obs = self.parallel_env.reset()
         self.agent_cum_rewards = np.zeros((len(self.agents), self.n_states, 1))
         self.agent_contiguous_states = np.full((len(self.agents), self.n_states), True)
+        for stack in self.stacker_eval:
+            stack.reset()
 
     def run_eval(self, dest: str = None, print_intermediate: bool = True) -> np.ndarray:
         """Run each state until the end and return the final scores.
@@ -75,36 +92,91 @@ class HanabiParallelSession:
         print("Agents", self.agents.agents)
         #  print("Running evaluation")
         total_reward = np.zeros((self.n_states,))
+        total_play_moves = np.zeros((self.n_states,))
+        total_discard_moves = np.zeros((self.n_states,))
+        total_reveal_moves = np.zeros((self.n_states,))
+        total_risky_moves = np.zeros((self.n_states,))
         step_rewards = []
+        playability = [[] for i in range(self.n_states)]
         step_types = self.parallel_env.step_types
+
 
         step = 0
         done = np.full((self.n_states, ), False)
         # run until all states terminate
         while not np.all(done):
+            
             valid_states = np.logical_not(done)
             agent_id, agent = self.agents.next()
             self._cur_obs, step_types = \
                 self.parallel_env.reset_states(
                     np.nonzero(step_types == StepType.LAST)[0], agent_id)
 
-            obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
+            obs = self.preprocess_obs_for_agent(self._cur_obs, agent, self.stacker_eval[agent_id])
             actions = agent.exploit(obs)
 
+            moves = self.parallel_env.get_moves(actions)
+            # get shaped rewards
+            reward_shaping = agent.shape_rewards(obs, moves)
+            risky_moves = reward_shaping < 0
+
+            # playability
+            counter = 0
+            step_playability = []
+            for o, m in zip(self._cur_obs, moves):
+                if m.move_type == pyhanabi.HanabiMove.Type.kPlay and valid_states[counter]:
+                    try:
+                        prob = o.playable_percent()[m.card_index]
+                        playability[counter].append(prob)
+                        step_playability.append(prob)
+                    except IndexError:
+                        pass
+                counter += 1
+
+            # get new observation based on action
             self._cur_obs, reward, step_types = \
                     self.parallel_env.step(actions, agent_id)
+
+            # convert moves
+            play_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kPlay else 0
+                          for m in moves]
+            discard_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kDiscard else 0
+                             for m in moves]
+            reveal_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kRevealColor or
+                            m.move_type == pyhanabi.HanabiMove.Type.kRevealRank else 0
+                            for m in moves]
+
             total_reward[valid_states] += reward[valid_states]
+            total_play_moves[valid_states] += np.array(play_moves)[valid_states]
+            total_discard_moves[valid_states] += np.array(discard_moves)[valid_states]
+            total_reveal_moves[valid_states] += np.array(reveal_moves)[valid_states]
+            total_risky_moves[valid_states] += risky_moves[valid_states]
+
             done = np.logical_or(done, step_types == StepType.LAST)
             if print_intermediate:
-                step_rewards.append({"terminated": np.sum(done), "rewards" : reward[valid_states]})
+                step_rewards.append({"terminated": np.sum(done),
+                    "risky": np.sum(risky_moves[valid_states]),
+                    "play": np.sum(np.array(play_moves)[valid_states]),
+                    "discard": np.sum(np.array(discard_moves)[valid_states]),
+                    "reveal": np.sum(np.array(reveal_moves)[valid_states]),
+                    "rewards" : reward[valid_states],
+                    "playability": step_playability})
+
             step += 1
 
         if print_intermediate:
             eval_pretty_print(step_rewards, total_reward)
+            print(playability[:2])
         if dest is not None:
             np.save(dest + "_step_rewards.npy", step_rewards)
             np.save(dest + "_total_rewards.npy", total_reward)
+            np.save(dest + "_move_eval.npy", {"play": total_play_moves,
+                "risky": total_risky_moves,
+                "discard": total_discard_moves,
+                "reveal": total_reveal_moves,
+                "playability": playability})
         return total_reward
+
 
     def run(self, n_steps: int):
         """Make <n_steps> in each of the parallel game states.
@@ -115,53 +187,75 @@ class HanabiParallelSession:
         #  step_types = self.parallel_env.step_types
 
         def handle_terminal_states(step_types, agent_id):
+            
             terminal = step_types == StepType.LAST
+            
             self._cur_obs, step_types = self.parallel_env.reset_states(
                 np.nonzero(terminal)[0],
                 agent_id)
-            obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
-            agent.add_experience_first(obs, step_types)
 
         while cur_step < n_steps:
+            
             # beginning of the agent's turn.
             agent_id, agent = self.agents.next()
-
             handle_terminal_states(self.parallel_env.step_types, agent_id)
 
             # agent acts
-            obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
-            actions = agent.explore(obs)
+            obs = self.preprocess_obs_for_agent(self._cur_obs, agent, self.stacker[agent_id])
+            
+            # check if somewhere within last round a final step was reached
+            is_last_step = np.zeros((self.n_states), dtype=bool)
+            for st in self.last_step_types:
+                is_last_step[st==StepType.LAST] = True
+                
+            # observation is complete
+            if self.last_actions[agent_id] is not None:
+                
+                # shape rewards
+                # convert actions to HanabiMOve objects
+                last_moves = self.parallel_env.get_moves(self.last_actions[agent_id])
+                add_rewards = agent.shape_rewards(self.last_observations[agent_id], last_moves).reshape(-1, 1)
+                shaped_rewards = self.agent_cum_rewards[agent_id] + add_rewards
 
+                # add observation to agent
+                agent.add_experience(
+                    self.last_observations[agent_id],
+                    self.last_actions[agent_id].reshape(-1,1),
+                    shaped_rewards,
+                    obs,
+                    is_last_step.reshape(-1, 1))
+            
+            # clear history for all states that had a last step
+            # then only the first state observation should be in stack
+            if True in is_last_step:
+                self.stacker[agent_id].reset_history(is_last_step)
+                obs = self.update_obs_for_agent(obs, agent, self.stacker[agent_id])           
+            
+            actions = agent.explore(obs)
+            
             # apply actions to the states and get new observations, rewards, statuses.
             self._cur_obs, rewards, step_types = self.parallel_env.step(
                 actions, agent_id)
-
-            # reward is cumulative over the course of the whole round.
-            # i.e. the agents gets a reward for his action as well as for the
-            # actions of its co-players.
+            
+            # store info from this round
+            self.last_actions[agent_id] = actions             
+            self.last_observations[agent_id] = obs
+            self.last_step_types[agent_id] = np.copy(step_types)
+            
+            # reset the cumulative reward for the current agent
+            self.agent_cum_rewards[agent_id, :] = 0
+            self.agent_contiguous_states[agent_id, :] = True
+            
+             # calculate team reward = own reward + reward of co players
             self.agent_cum_rewards[self.agent_contiguous_states] += np.broadcast_to(
                 rewards.reshape((-1, 1)),
                 self.agent_cum_rewards.shape)[self.agent_contiguous_states]
 
-            # set the terminal states as not contiguous for all agents
             self.agent_contiguous_states[:, step_types == 2] = False
-            # reset contigency of all states for current agent
-            self.agent_contiguous_states[agent_id, :] = True
-
-            # add new experiences to the agent
-            obs = self.preprocess_obs_for_agent(self._cur_obs, agent)
-            agent.add_experience(
-                obs,
-                actions,
-                self.agent_cum_rewards[agent_id],
-                step_types)
-
-            # reset the cumulative reward for the current agent
-            self.agent_cum_rewards[agent_id, :] = 0
 
             total_reward += rewards
-
-            cur_step += 1
+            cur_step += 1   
+            
         return cur_step, total_reward
 
 
@@ -184,11 +278,24 @@ class HanabiParallelSession:
             self.run(n_sim_steps)
             for _ in range(n_train_steps):
                 for agent in self.agents.agents:
+                    #print(repr(agent))
                     agent.update()
-
-    def preprocess_obs_for_agent(self, obs, agent):
+                    
+    def preprocess_obs_for_agent(self, obs, agent, stack):
+        
         if agent.requires_vectorized_observation():
             vobs = np.array(self.parallel_env._parallel_env.encoded_observations)
+            if stack is not None:
+                stack.add_observation(vobs)
+                vobs = stack.get_current_obs()
             vlms = np.array(self.parallel_env._parallel_env.encoded_legal_moves)
             return (obs, (vobs, vlms))
         return obs
+    
+    def update_obs_for_agent(self, obs, agent, stack):
+        
+        if agent.requires_vectorized_observation() and stack is not None:
+            return (obs[0], (stack.get_current_obs(), obs[1][1]))
+        return obs
+    
+    

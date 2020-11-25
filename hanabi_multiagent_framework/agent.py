@@ -26,6 +26,7 @@ import abc
 from typing import Tuple, Union, List
 from numpy import ndarray
 from hanabi_learning_environment.pyhanabi_pybind import HanabiMove, HanabiObservation
+from .observation_stacker import ObservationStacker
 
 class HanabiAgent(abc.ABC):
     """
@@ -69,11 +70,12 @@ class HanabiAgent(abc.ABC):
         """
 
     @abc.abstractmethod
-    def add_experience(self,
-                       observations: ndarray,
-                       actions: ndarray,
-                       rewards: ndarray,
-                       step_types: ndarray) -> None:
+    def add_experience(self, 
+                       observations_tm1, 
+                       actions_tm1, 
+                       rewards_t, 
+                       observations_t, 
+                       term_t) -> None:
         """Add observations to the agent's buffers. All states are passed for completeness,
         but the ones with step_type == dm_env.StepType.FIRST should be ignored (they should have
         already been processed in add_experience_first(...) function).
@@ -83,6 +85,20 @@ class HanabiAgent(abc.ABC):
             actions      -- actions taken reach this states.
             rewards      -- rewards for taking this actions.
             step_types   -- state status.
+        """
+        
+    @abc.abstractmethod
+    def shape_rewards(self, 
+                      observations, 
+                      moves) -> Union[ndarray, int]:
+        """
+        """
+        
+    @abc.abstractmethod
+    def create_stacker(self, 
+                       obs_len, 
+                       n_states) -> ObservationStacker: 
+        """
         """
 
     @abc.abstractmethod

@@ -72,34 +72,34 @@ def make_hanabi_env_config(
     elif environment_name in ["Hanabi-Small", "Hanabi-Small-CardKnowledge"]:
         config = {
             "colors":
-                2,
+                3,
             "ranks":
                 5,
             "players":
                 num_players,
             "hand_size":
-                2,
-            "max_information_tokens":
                 3,
+            "max_information_tokens":
+                5,
             "max_life_tokens":
-                1,
+                2,
             "observation_type":
                 pyhanabi.AgentObservationType.CARD_KNOWLEDGE.value
         }
     elif environment_name == "Hanabi-Small-Oracle":
         config = {
             "colors":
-                2,
+                3,
             "ranks":
                 5,
             "players":
                 num_players,
             "hand_size":
-                2,
-            "max_information_tokens":
                 3,
+            "max_information_tokens":
+                5,
             "max_life_tokens":
-                1,
+                2,
             "observation_type":
                 pyhanabi.AgentObservationType.SEER.value
         }
