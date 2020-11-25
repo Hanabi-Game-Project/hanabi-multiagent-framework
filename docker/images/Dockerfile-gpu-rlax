@@ -33,7 +33,7 @@ RUN /bin/bash /dm-tools/miniconda.sh -b -p /opt/conda && \
     pip install --upgrade pip && \
     pip install pyyaml gin-config && \
     # install cuda version of jaxlib
-    pip install --upgrade https://storage.googleapis.com/jax-releases/cuda101/jaxlib-$(pip search jaxlib | sed "s/.*(//" | sed "s/).*//")-$(python -V | awk '{split($2,a,"."); print "cp" a[1] a[2]}')-none-manylinux2010_x86_64.whl && \
+    pip install --upgrade https://storage.googleapis.com/jax-releases/cuda101/jaxlib-0.1.55-$(python -V | awk '{split($2,a,"."); print "cp" a[1] a[2]}')-none-manylinux2010_x86_64.whl && \
     # install deepmind dependencies
     pip install /dm-tools/dm-env dm-tools/dm-haiku dm-tools/rlax && \
     # install hanabi
