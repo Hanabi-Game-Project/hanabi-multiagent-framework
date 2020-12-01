@@ -119,8 +119,17 @@ class HanabiParallelSession:
             moves = self.parallel_env.get_moves(actions)
             # get shaped rewards
             reward_shaping = agent.shape_rewards(obs, moves)
-            risky_moves = reward_shaping == agent.get_shaper_params()[0]
-            bad_discards = reward_shaping == agent.get_shaper_params()[1]
+
+            # temporary workaround to test rewardshaping for different shaping rules
+            if agent.get_shaper_params()[0] != 0:
+                risky_moves = reward_shaping == agent.get_shaper_params()[0]
+            else:
+                risky_moves = reward_shaping == 999
+            if agent.get_shaper_params()[1] != 0:
+                bad_discards = reward_shaping == agent.get_shaper_params()[1]
+            else:
+                bad_discards = reward_shaping == 999
+
 
             # playability
             counter = 0
