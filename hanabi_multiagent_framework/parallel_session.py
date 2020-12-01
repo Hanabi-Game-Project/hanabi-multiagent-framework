@@ -96,6 +96,7 @@ class HanabiParallelSession:
         total_discard_moves = np.zeros((self.n_states,))
         total_reveal_moves = np.zeros((self.n_states,))
         total_risky_moves = np.zeros((self.n_states,))
+        total_bad_discards = np.zeros((self.n_states))
         step_rewards = []
         playability = [[] for i in range(self.n_states)]
         step_types = self.parallel_env.step_types
@@ -118,7 +119,8 @@ class HanabiParallelSession:
             moves = self.parallel_env.get_moves(actions)
             # get shaped rewards
             reward_shaping = agent.shape_rewards(obs, moves)
-            risky_moves = reward_shaping < 0
+            risky_moves = reward_shaping == agent.get_shaper_params()[0]
+            bad_discards = reward_shaping == agent.get_shaper_params()[1]
 
             # playability
             counter = 0
@@ -151,13 +153,15 @@ class HanabiParallelSession:
             total_discard_moves[valid_states] += np.array(discard_moves)[valid_states]
             total_reveal_moves[valid_states] += np.array(reveal_moves)[valid_states]
             total_risky_moves[valid_states] += risky_moves[valid_states]
+            total_bad_discards[valid_states] += bad_discards[valid_states]
 
             done = np.logical_or(done, step_types == StepType.LAST)
             if print_intermediate:
                 step_rewards.append({"terminated": np.sum(done),
                     "risky": np.sum(risky_moves[valid_states]),
                     "play": np.sum(np.array(play_moves)[valid_states]),
-                    "discard": np.sum(np.array(discard_moves)[valid_states]),
+                    "bad_discards":  np.sum(bad_discards[valid_states]),
+                    "discard": np.sum(np.array(discard_moves)[valid_states]), 
                     "reveal": np.sum(np.array(reveal_moves)[valid_states]),
                     "rewards" : reward[valid_states],
                     "playability": step_playability})
@@ -172,6 +176,7 @@ class HanabiParallelSession:
             np.save(dest + "_total_rewards.npy", total_reward)
             np.save(dest + "_move_eval.npy", {"play": total_play_moves,
                 "risky": total_risky_moves,
+                "bad_discard": total_bad_discards,
                 "discard": total_discard_moves,
                 "reveal": total_reveal_moves,
                 "playability": playability})
