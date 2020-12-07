@@ -168,9 +168,6 @@ class HanabiParallelSession:
                     "playability": step_playability})
 
             step += 1
-            
-        print('bad discards', total_bad_discards)
-        print('risky', total_risky_moves)
 
         if print_intermediate:
             eval_pretty_print(step_rewards, total_reward)
