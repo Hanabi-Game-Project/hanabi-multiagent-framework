@@ -11,7 +11,7 @@ from .agent import HanabiAgent
 from .environment import HanabiParallelEnvironment
 from .experience_buffer import ExperienceBuffer
 from .utils import eval_pretty_print
-from hanabi_agents.rlax_dqn import RewardShaper
+from hanabi_agents.rlax_dqn import RewardShaper, ShapingType
 from _cffi_backend import typeof
 import timeit
 from hanabi_learning_environment import pyhanabi_pybind as pyhanabi
@@ -118,18 +118,10 @@ class HanabiParallelSession:
 
             moves = self.parallel_env.get_moves(actions)
             # get shaped rewards
-            reward_shaping = agent.shape_rewards(obs, moves)
-
-            # temporary workaround to test rewardshaping for different shaping rules
-            if agent.get_shaper_params()[0] != 0:
-                risky_moves = reward_shaping == agent.get_shaper_params()[0]
-            else:
-                risky_moves = reward_shaping == 999
-            if agent.get_shaper_params()[1] != 0:
-                bad_discards = reward_shaping == agent.get_shaper_params()[1]
-            else:
-                bad_discards = reward_shaping == 999
-
+            reward_shaping, shape_type = agent.shape_rewards(obs, moves)
+            
+            risky_moves = shape_type == ShapingType.RISKY
+            bad_discards = shape_type == ShapingType.DISCARD_LAST_OF_KIND
 
             # playability
             counter = 0
@@ -228,8 +220,8 @@ class HanabiParallelSession:
                 # shape rewards
                 # convert actions to HanabiMOve objects
                 last_moves = self.parallel_env.get_moves(self.last_actions[agent_id])
-                add_rewards = agent.shape_rewards(self.last_observations[agent_id], last_moves).reshape(-1, 1)
-                shaped_rewards = self.agent_cum_rewards[agent_id] + add_rewards
+                add_rewards, shape_type = agent.shape_rewards(self.last_observations[agent_id], last_moves)
+                shaped_rewards = self.agent_cum_rewards[agent_id] + add_rewards.reshape(-1, 1)
 
                 # add observation to agent
                 agent.add_experience(

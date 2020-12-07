@@ -25,8 +25,6 @@ agent_0/RlaxRainbowParams.beta_is                = @schedule_beta_is()
 agent_0/RlaxRainbowParams.priority_w			 = 0.6
 agent_0/RlaxRainbowParams.history_size           = 1
 
-# define the parameters for the agents reward shaping
 agent_0/RewardShapingParams.min_play_probability = 0
 agent_0/RewardShapingParams.w_play_probability	 = 0
 agent_0/RewardShapingParams.penalty_last_of_kind = 0.5
-
