@@ -99,6 +99,7 @@ class HanabiParallelSession:
         total_bad_discards = np.zeros((self.n_states))
         step_rewards = []
         playability = [[] for i in range(self.n_states)]
+        move_eval = [[] for i in range(self.n_states)]
         step_types = self.parallel_env.step_types
 
 
@@ -136,6 +137,11 @@ class HanabiParallelSession:
                         pass
                 counter += 1
 
+            # moves
+            for idx, a in enumerate(actions):
+                if valid_states[idx]:
+                    move_eval[idx].append(a)
+            
             # get new observation based on action
             self._cur_obs, reward, step_types = \
                     self.parallel_env.step(actions, agent_id)
@@ -183,7 +189,14 @@ class HanabiParallelSession:
                 "bad_discard": total_bad_discards,
                 "discard": total_discard_moves,
                 "reveal": total_reveal_moves,
-                "playability": playability})
+                "playability": playability,
+                "moves": move_eval})
+        
+        # store the average reward as performance parameter in reward shaping
+        for agent in self.agents.agents:
+            if agent.reward_shaper is not None:
+                agent.reward_shaper.performance = np.mean(total_reward)  
+        
         return total_reward
 
 
