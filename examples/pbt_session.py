@@ -74,6 +74,7 @@ def session(
     population_params = PBTParams()
     population_size = population_params.population_size
     discard_perc = population_params.discard_percent
+    lifespan = population_params.life_span
     ########### debugging##########
     shutil.rmtree(output_dir)
     ###############################
@@ -230,12 +231,15 @@ def session(
 
             agents[0].save_weights(
                 os.path.join(output_dir, "weights", "pos_0"))
-            choose_fittest(mean_reward, discard_perc, agents[0])
+            if epoch % lifespan == 0:
+                choose_fittest(mean_reward, discard_perc, agents[0])
         else:
             for aid, agent in enumerate(agents):
                 agent.save_weights(
                     os.path.join(output_dir, "weights", "pos_" + str(aid)))
-                choose_fittest(mean_reward, discard_perc, agent)
+                #TODO: Questionable for non-selfplay --> just one agent?
+                if epoch % lifespan == 0:
+                    choose_fittest(mean_reward, discard_perc, agent)
         print('pbt_session status: 4')
 
         # if epoch % (100000 // eval_freq) == 0:
