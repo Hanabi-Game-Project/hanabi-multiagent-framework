@@ -6,11 +6,11 @@ from hanabi_multiagent_framework.utils import make_hanabi_env_config
 import numpy as np
 from numpy import ndarray
 from hanabi_agents.rule_based import RulebasedAgent
-from hanabi_agents.rule_based.predefined_rules import piers_rules
+from hanabi_agents.rule_based.predefined_rules import piers_rules, flawed_rules, VanDenBergh
 
 n_players = 2
-n_parallel = 10
-env_conf = make_hanabi_env_config('Hanabi-Full', n_players)
+n_parallel = 100
+env_conf = make_hanabi_env_config('Hanabi-Small', n_players)
 
 env = hmf.HanabiParallelEnvironment(env_conf, n_parallel)
 
