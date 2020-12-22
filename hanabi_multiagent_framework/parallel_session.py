@@ -81,7 +81,8 @@ class HanabiParallelSession:
         self.agent_cum_rewards = np.zeros((len(self.agents), self.n_states, 1))
         self.agent_contiguous_states = np.full((len(self.agents), self.n_states), True)
         for stack in self.stacker_eval:
-            stack.reset()
+            if stack is not None:
+                stack.reset()
 
     def run_eval(self, dest: str = None, print_intermediate: bool = True) -> np.ndarray:
         """Run each state until the end and return the final scores.
@@ -116,7 +117,10 @@ class HanabiParallelSession:
             obs = self.preprocess_obs_for_agent(self._cur_obs, agent, self.stacker_eval[agent_id])
             actions = agent.exploit(obs)
 
-            moves = self.parallel_env.get_moves(actions)
+            if agent.requires_vectorized_observation():
+                moves = self.parallel_env.get_moves(actions)
+            else:
+                moves = actions
             # get shaped rewards
             reward_shaping, shape_type = agent.shape_rewards(obs, moves)
             
@@ -165,7 +169,8 @@ class HanabiParallelSession:
                     "discard": np.sum(np.array(discard_moves)[valid_states]), 
                     "reveal": np.sum(np.array(reveal_moves)[valid_states]),
                     "rewards" : reward[valid_states],
-                    "playability": step_playability})
+                    "playability": step_playability,
+                    "agent_id": agent_id})
 
             step += 1
 
@@ -219,14 +224,17 @@ class HanabiParallelSession:
                 
                 # shape rewards
                 # convert actions to HanabiMOve objects
-                last_moves = self.parallel_env.get_moves(self.last_actions[agent_id])
+                if agent.requires_vectorized_observation():
+                    last_moves = self.parallel_env.get_moves(self.last_actions[agent_id])
+                else:
+                    last_moves = self.last_actions[agent_id]
                 add_rewards, shape_type = agent.shape_rewards(self.last_observations[agent_id], last_moves)
                 shaped_rewards = self.agent_cum_rewards[agent_id] + add_rewards.reshape(-1, 1)
 
                 # add observation to agent
                 agent.add_experience(
                     self.last_observations[agent_id],
-                    self.last_actions[agent_id].reshape(-1,1),
+                    self.last_actions[agent_id],
                     shaped_rewards,
                     obs,
                     is_last_step.reshape(-1, 1))
@@ -234,8 +242,9 @@ class HanabiParallelSession:
             # clear history for all states that had a last step
             # then only the first state observation should be in stack
             if True in is_last_step:
-                self.stacker[agent_id].reset_history(is_last_step)
-                obs = self.update_obs_for_agent(obs, agent, self.stacker[agent_id])           
+                if self.stacker[agent_id] is not None:
+                    self.stacker[agent_id].reset_history(is_last_step)
+                    obs = self.update_obs_for_agent(obs, agent, self.stacker[agent_id])           
             
             actions = agent.explore(obs)
             
