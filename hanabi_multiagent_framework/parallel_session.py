@@ -234,7 +234,6 @@ class HanabiParallelSession:
                 # convert actions to HanabiMOve objects
                 last_moves = self.parallel_env.get_moves(self.last_actions[agent_id])
                 add_rewards, shape_type = agent.shape_rewards(self.last_observations[agent_id], last_moves)
-                print(add_rewards)
                 shaped_rewards = self.agent_cum_rewards[agent_id] + add_rewards.reshape(-1, 1)
 
                 # add observation to agent
