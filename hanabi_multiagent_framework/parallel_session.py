@@ -11,7 +11,7 @@ from .agent import HanabiAgent
 from .environment import HanabiParallelEnvironment
 from .experience_buffer import ExperienceBuffer
 from .utils import eval_pretty_print
-from hanabi_agents.rlax_dqn import RewardShaper
+from hanabi_agents.rlax_dqn import RewardShaper, ShapingType
 from _cffi_backend import typeof
 import timeit
 from hanabi_learning_environment import pyhanabi_pybind as pyhanabi
@@ -96,8 +96,10 @@ class HanabiParallelSession:
         total_discard_moves = np.zeros((self.n_states,))
         total_reveal_moves = np.zeros((self.n_states,))
         total_risky_moves = np.zeros((self.n_states,))
+        total_bad_discards = np.zeros((self.n_states))
         step_rewards = []
         playability = [[] for i in range(self.n_states)]
+        move_eval = [[] for i in range(self.n_states)]
         step_types = self.parallel_env.step_types
 
 
@@ -117,8 +119,10 @@ class HanabiParallelSession:
 
             moves = self.parallel_env.get_moves(actions)
             # get shaped rewards
-            reward_shaping = agent.shape_rewards(obs, moves)
-            risky_moves = reward_shaping < 0
+            reward_shaping, shape_type = agent.shape_rewards(obs, moves)
+            
+            risky_moves = shape_type == ShapingType.RISKY
+            bad_discards = shape_type == ShapingType.DISCARD_LAST_OF_KIND
 
             # playability
             counter = 0
@@ -133,6 +137,11 @@ class HanabiParallelSession:
                         pass
                 counter += 1
 
+            # moves
+            for idx, a in enumerate(actions):
+                if valid_states[idx]:
+                    move_eval[idx].append(a)
+            
             # get new observation based on action
             self._cur_obs, reward, step_types = \
                     self.parallel_env.step(actions, agent_id)
@@ -151,13 +160,15 @@ class HanabiParallelSession:
             total_discard_moves[valid_states] += np.array(discard_moves)[valid_states]
             total_reveal_moves[valid_states] += np.array(reveal_moves)[valid_states]
             total_risky_moves[valid_states] += risky_moves[valid_states]
+            total_bad_discards[valid_states] += bad_discards[valid_states]
 
             done = np.logical_or(done, step_types == StepType.LAST)
             if print_intermediate:
                 step_rewards.append({"terminated": np.sum(done),
                     "risky": np.sum(risky_moves[valid_states]),
                     "play": np.sum(np.array(play_moves)[valid_states]),
-                    "discard": np.sum(np.array(discard_moves)[valid_states]),
+                    "bad_discards":  np.sum(bad_discards[valid_states]),
+                    "discard": np.sum(np.array(discard_moves)[valid_states]), 
                     "reveal": np.sum(np.array(reveal_moves)[valid_states]),
                     "rewards" : reward[valid_states],
                     "playability": step_playability})
@@ -172,9 +183,17 @@ class HanabiParallelSession:
             np.save(dest + "_total_rewards.npy", total_reward)
             np.save(dest + "_move_eval.npy", {"play": total_play_moves,
                 "risky": total_risky_moves,
+                "bad_discard": total_bad_discards,
                 "discard": total_discard_moves,
                 "reveal": total_reveal_moves,
-                "playability": playability})
+                "playability": playability,
+                "moves": move_eval})
+        
+        # store the average reward as performance parameter in reward shaping
+        for agent in self.agents.agents:
+            if agent.reward_shaper is not None:
+                agent.reward_shaper.performance = np.mean(total_reward)  
+        
         return total_reward
 
 
@@ -214,8 +233,8 @@ class HanabiParallelSession:
                 # shape rewards
                 # convert actions to HanabiMOve objects
                 last_moves = self.parallel_env.get_moves(self.last_actions[agent_id])
-                add_rewards = agent.shape_rewards(self.last_observations[agent_id], last_moves).reshape(-1, 1)
-                shaped_rewards = self.agent_cum_rewards[agent_id] + add_rewards
+                add_rewards, shape_type = agent.shape_rewards(self.last_observations[agent_id], last_moves)
+                shaped_rewards = self.agent_cum_rewards[agent_id] + add_rewards.reshape(-1, 1)
 
                 # add observation to agent
                 agent.add_experience(

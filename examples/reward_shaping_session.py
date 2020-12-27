@@ -156,20 +156,33 @@ def session(
         start_time = time.time()
         
         
-def linear_schedule(val_start, val_end, n_epochs):
+def linear_schedule(val_start, val_end, n_steps):
     
     def schedule(step):
-        increase = (val_end - val_start) / n_epochs
+        increase = (val_end - val_start) / n_steps
         return min(val_end, val_start + step * increase)
     
     return schedule
 
 
+def ramp_schedule(val_start, val_end, n_steps):
+    
+    def schedule(step):
+        return val_start if step < n_steps else val_end
+    
+    return schedule
+
+
 @gin.configurable
-def schedule_beta_is(value_start, value_end, epochs):
-    return linear_schedule(value_start, value_end, epochs)
+def schedule_beta_is(value_start, value_end, steps):
+    return linear_schedule(value_start, value_end, steps)
+
+
+@gin.configurable
+def schedule_risk_penalty(value_start, value_end, steps):
+    return ramp_schedule(value_start, value_end, steps)
+     
         
-  
 def main(args):
     
     # load configuration from gin file
