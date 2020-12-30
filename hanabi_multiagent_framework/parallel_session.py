@@ -92,6 +92,7 @@ class HanabiParallelSession:
         print("Agents", self.agents.agents)
         #  print("Running evaluation")
         total_reward = np.zeros((self.n_states,))
+        total_shaped_reward = np.zeros((self.n_states,))
         total_play_moves = np.zeros((self.n_states,))
         total_discard_moves = np.zeros((self.n_states,))
         total_reveal_moves = np.zeros((self.n_states,))
@@ -145,6 +146,8 @@ class HanabiParallelSession:
             # get new observation based on action
             self._cur_obs, reward, step_types = \
                     self.parallel_env.step(actions, agent_id)
+                    
+            shaped_reward = reward + reward_shaping
 
             # convert moves
             play_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kPlay else 0
@@ -156,6 +159,7 @@ class HanabiParallelSession:
                             for m in moves]
 
             total_reward[valid_states] += reward[valid_states]
+            total_shaped_reward[valid_states] += shaped_reward[valid_states]
             total_play_moves[valid_states] += np.array(play_moves)[valid_states]
             total_discard_moves[valid_states] += np.array(discard_moves)[valid_states]
             total_reveal_moves[valid_states] += np.array(reveal_moves)[valid_states]
@@ -181,6 +185,7 @@ class HanabiParallelSession:
         if dest is not None:
             np.save(dest + "_step_rewards.npy", step_rewards)
             np.save(dest + "_total_rewards.npy", total_reward)
+            np.save(dest + "_total_shaped_rewards.npy", total_reward)
             np.save(dest + "_move_eval.npy", {"play": total_play_moves,
                 "risky": total_risky_moves,
                 "bad_discard": total_bad_discards,
@@ -234,7 +239,6 @@ class HanabiParallelSession:
                 # convert actions to HanabiMOve objects
                 last_moves = self.parallel_env.get_moves(self.last_actions[agent_id])
                 add_rewards, shape_type = agent.shape_rewards(self.last_observations[agent_id], last_moves)
-                print(add_rewards)
                 shaped_rewards = self.agent_cum_rewards[agent_id] + add_rewards.reshape(-1, 1)
 
                 # add observation to agent
@@ -298,7 +302,6 @@ class HanabiParallelSession:
             self.run(n_sim_steps)
             for _ in range(n_train_steps):
                 for agent in self.agents.agents:
-                    #print(repr(agent))
                     agent.update()
                     
     def preprocess_obs_for_agent(self, obs, agent, stack):
