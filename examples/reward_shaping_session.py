@@ -32,11 +32,12 @@ def session(
             n_train_steps: int = 4,
             n_sim_steps: int = 2,
             epochs: int = 1_000_000,
-            eval_freq: int = 1,
+            epoch_offset = 0,
+            eval_freq: int = 500,
             self_play: bool = True,
             output_dir = "/output",
             start_with_weights=None,
-            n_backup = 1
+            n_backup = 500
     ):
     
     print(epochs, n_parallel, n_parallel_eval)
@@ -116,7 +117,7 @@ def session(
     start_time = time.time()
     
     # start training
-    for epoch in range(epochs):
+    for epoch in range(epoch_offset, epochs + epoch_offset):
         
         # train
         parallel_session.train(n_iter=eval_freq,
@@ -128,7 +129,10 @@ def session(
         n_warmup = 0
         
         # print number of train steps
-        print("step", (epoch + 1) * eval_freq * n_train_steps)
+        if self_play:
+            print("step", (epoch + 1) * eval_freq * n_train_steps * n_players)
+        else:
+            print("step", (epoch + 1) * eval_freq * n_train_steps)
         
         # evaluate
         mean_reward = parallel_eval_session.run_eval(
@@ -137,6 +141,8 @@ def session(
 
         # compare to previous iteration and store checkpoints
         if (epoch + 1) % n_backup == 0:
+            
+            print('save weights', epoch)
             
             if self_play:
                 agents[0].save_weights(
