@@ -76,14 +76,18 @@ def session(
             agents = [agent for _ in range(n_players)]
             logger.info("self play")
             logger.info("Agent Config\n" + str(agent))
+            logger.info("Reward Shaper Config\n" + str(agent.reward_shaper))
     
     else:
         
         agents = []
+        logger.info("multi play")
           
         for i in range(n_players):
             with gin.config_scope('agent_'+str(i)): 
                 
+                logger.info("Agent Config " + i + " \n" + str(agent))
+                logger.info("Reward Shaper Config\n" + str(agent.reward_shaper))
                 agent = load_agent(env)
                 agents.append(agent)
     
