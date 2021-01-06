@@ -32,10 +32,11 @@ def session(
             n_train_steps: int = 4,
             n_sim_steps: int = 2,
             epochs: int = 1_000_000,
-            eval_freq: int = 500,
+            eval_freq: int = 1,
             self_play: bool = True,
             output_dir = "/output",
-            n_backup = 500
+            start_with_weights=None,
+            n_backup = 1
     ):
     
     print(epochs, n_parallel, n_parallel_eval)
@@ -90,6 +91,13 @@ def session(
                 logger.info("Reward Shaper Config\n" + str(agent.reward_shaper))
                 agent = load_agent(env)
                 agents.append(agent)
+                
+    # load previous weights            
+    if start_with_weights is not None:
+        print(start_with_weights)
+        for aid, agent in enumerate(agents):
+            if "agent_" + str(aid) in start_with_weights:
+                agent.restore_weights(*(start_with_weights["agent_" + str(aid)]))
     
     # start parallel session for training and evaluation          
     parallel_session = hmf.HanabiParallelSession(env, agents)
@@ -237,6 +245,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir", type=str, default="/output",
         help="Destination for storing weights and statistics")
+    parser.add_argument(
+        "--start_with_weights", type=json.loads, default=None,
+        help="Initialize the agents with the specified weights before training. Syntax: {\"agent_0\" : [\"path/to/weights/1\", ...], ...}")
 
     args = parser.parse_args()
 
