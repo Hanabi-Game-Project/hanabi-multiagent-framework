@@ -6,7 +6,7 @@ session.epochs = 3500
 # define schedule for annealing of beta_is
 schedule_beta_is.value_start = 0.4
 schedule_beta_is.value_end = 1
-schedule_beta_is.epochs = 3500
+schedule_beta_is.steps = 3500
 
 # define the agent parameters
 agent_0/RlaxRainbowParams.train_batch_size       = 32
