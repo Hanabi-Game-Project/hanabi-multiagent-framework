@@ -15,7 +15,6 @@ def load_agent(env):
     reward_shaper = RewardShaper(reward_shaping_params)
     
     agent_params = RlaxRainbowParams()
-    print(agent_params)
     return DQNAgent(env.observation_spec_vec_batch()[0],
                     env.action_spec_vec(),
                     agent_params,
@@ -36,6 +35,7 @@ def session(
             eval_freq: int = 500,
             self_play: bool = True,
             output_dir = "/output",
+            n_backup = 500
     ):
     
     print(epochs, n_parallel, n_parallel_eval)
@@ -124,7 +124,7 @@ def session(
             ).mean()
 
         # compare to previous iteration and store checkpoints
-        if epoch % 500 == 0:
+        if (epoch + 1) % n_backup == 0:
             
             if self_play:
                 agents[0].save_weights(
