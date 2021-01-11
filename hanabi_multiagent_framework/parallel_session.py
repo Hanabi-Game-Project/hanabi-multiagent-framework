@@ -185,7 +185,7 @@ class HanabiParallelSession:
         if dest is not None:
             np.save(dest + "_step_rewards.npy", step_rewards)
             np.save(dest + "_total_rewards.npy", total_reward)
-            np.save(dest + "_total_shaped_rewards.npy", total_reward)
+            np.save(dest + "_total_shaped_rewards.npy", total_shaped_reward)
             np.save(dest + "_move_eval.npy", {"play": total_play_moves,
                 "risky": total_risky_moves,
                 "bad_discard": total_bad_discards,
