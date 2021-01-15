@@ -4,6 +4,7 @@ import gin
 import logging
 import time
 import shutil
+import ray
 
 import hanabi_multiagent_framework as hmf
 from hanabi_multiagent_framework.utils import make_hanabi_env_config
@@ -13,7 +14,8 @@ from hanabi_agents.pbt import AgentDQNPopulation
 from hanabi_multiagent_framework.utils import eval_pretty_print
 
 
-
+ray.init(num_gpus =1)
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.2"
 
 """
 This is an example on how to run the PBT approach for training on DQN/Rainbow agents --> One agent interoperating with
@@ -45,27 +47,14 @@ def session(
             n_players: int = 2,
             max_life_tokens: int = None,
             n_parallel: int = 32,
-            n_parallel_eval:int = 1_000,
+            n_parallel_eval:int = 256,
             n_train_steps: int = 1,
             n_sim_steps: int = 1,
-            epochs: int = 1_000_000,
+            epochs: int = 1_000,
             eval_freq: int = 500,
             self_play: bool = True,
             output_dir = "/output",
     ):
-
-    # '''################################################################################################################
-    # 0. Set parameters for PBT-Training.
-    # '''
-    # pbt_params = AgentDQNpop_params(population_size=2,
-    #                                 gin_files='rlax_agent.gin',
-    #                                 agent_config_path="",
-    #                                 lr_factor=0.2 ,
-    #                                 lr_start_var=2.0,
-    #                                 buffersize=[2**10, 2**11, 2**12, 2**13, 2**14, 2**15],
-    #                                 buffer_factor=2.0,
-    #                                 discard_perc=0.8
-    #                                 )
 
     # TODO: differentiate between agents with/without weights to save (rule vs reinforce)? --> pass
     '''################################################################################################################
@@ -76,7 +65,10 @@ def session(
     discard_perc = population_params.discard_percent
     lifespan = population_params.life_span
     ########### debugging##########
+
     shutil.rmtree(output_dir)
+
+    os.makedirs(output_dir)
     ###############################
     os.makedirs(os.path.join(output_dir, "weights"))
     os.makedirs(os.path.join(output_dir, "stats"))
@@ -84,6 +76,12 @@ def session(
         os.makedirs(os.path.join(output_dir, "weights", "pos_" + str(i)))
         for j in range(population_size):
             os.makedirs(os.path.join(output_dir, "weights","pos_" + str(i), "agent_" + str(j)))
+
+
+    #assert n_parallel and n_parallel_eval are multiples of popsize
+    assert n_parallel % population_size == 0, 'n_parallel has to be multiple of pop_size'
+    assert n_parallel_eval % population_size == 0, 'n_parallel_eval has to be multiple of pop_size'
+
 
     '''################################################################################################################
     2. Helper functions
@@ -106,7 +104,7 @@ def session(
     def choose_fittest(mean_reward, discard_perc, agent):
         """Chosses the fittest agents after evaluation run and overwrites all the other agents with weights + permutation of lr + buffersize"""
         no_fittest = mean_reward.shape[0] - int(mean_reward.shape[0] * discard_perc)
-        index_loser = np.argpartition(-mean_reward, no_fittest)[no_fittest:]
+        index_loser = np.argpartition(mean_reward, no_fittest)[:no_fittest]
         index_survivor = np.argpartition(-mean_reward, no_fittest)[:no_fittest]
         agent.survival_fittest(index_survivor, index_loser)
 
@@ -119,6 +117,12 @@ def session(
             mean_reward[i] = mean_score
             print('Average score achieved by AGENT_{} = '.format(i), mean_score)
         return mean_reward
+    
+    def generation_scheduler(epochs, val_start = 50, val_end = 200):
+        '''Determines the cycle with with the population is evaluated'''
+        def scheduler(step):
+            
+            return scheduler
 
     '''################################################################################################################
     3. Initialize environments to play with
@@ -145,15 +149,11 @@ def session(
             agents = [self_play_agent for _ in range(n_players)]
     # TODO: --later-- non-self-play
     else:
-        print('wrong way self play')
+
         agent_1 = AgentDQNPopulation()
-        # agent_2 = AgentRulePopulation()
         agent_X = None
         ...
         agents = [agent_1]
-
-        # agents = [DQNAgent(env.observation_spec_vec_batch()[0], env.action_spec_vec(),
-        #                    agent_params) for _ in range(n_players)]
 
     parallel_session = hmf.HanabiParallelSession(env, agents)
     parallel_session.reset()
@@ -164,51 +164,32 @@ def session(
     5. Start Training/Evaluation
     '''
     # eval before
-    mean_reward_prev = 0
+    mean_reward_prev = np.zeros(population_size)
     total_reward = parallel_eval_session.run_eval()
     mean_reward = split_evaluation(total_reward, n_parallel, population_size)
 
     # train
-    print('pbt_session status: 1')
     parallel_session.train(
         n_iter=eval_freq,
         n_sim_steps=n_sim_steps,
         n_train_steps=n_train_steps,
-        n_warmup=int(256 * 5 * n_players / n_sim_steps / n_parallel))
+        n_warmup=int(256 * 5 * n_players / n_sim_steps))
 
     print("step", 1 * eval_freq * n_train_steps)
     # eval
     mean_reward_prev = mean_reward
-    # mean_reward = parallel_eval_session.run_eval(
-    #     dest=os.path.join(
-    #         output_dir,
-    #         "stats", "0")
-    #     ).mean()
-    total_reward = parallel_eval_session.run_eval()
+    total_reward = parallel_eval_session.run_eval(dest=os.path.join(output_dir, "stats_", "0"))
     mean_reward= split_evaluation(total_reward, n_parallel, population_size)
 
-    print('pbt_session status: 2')
     if self_play:
         agents[0].save_weights(
-            os.path.join(output_dir, "weights","pos_0"))
-        choose_fittest(mean_reward, discard_perc, agents[0])
+            os.path.join(output_dir, "weights","pos_0"), mean_reward)
     else:
         for aid, agent in enumerate(agents):
             agent.save_weights(
-                os.path.join(output_dir, "weights","pos_" + str(aid)))
-            choose_fittest(mean_reward, discard_perc, agent)
-    #TODO: cannot save every single ckpt - what is mean_reward_prev?
-    # if mean_reward_prev < mean_reward:
-    #     if self_play:
-    #         agents[0].save_weights(
-    #             os.path.join(output_dir, "weights", "agent_0"), "best")
-    #     else:
-    #         for aid, agent in enumerate(agents):
-    #             agent.save_weights(
-    #                 os.path.join(output_dir, "weights", "agent_" + str(aid)), "best")
-    print('pbt_session status: 3')
+                os.path.join(output_dir, "weights","pos_" + str(aid)), mean_reward)
+
     for epoch in range(epochs):
-        # print('1', os.system('nvidia-smi'))
 
         parallel_session.train(
             n_iter=eval_freq,
@@ -216,9 +197,8 @@ def session(
             n_train_steps=n_train_steps,
             n_warmup=0)
         print("step", (epoch + 2) * eval_freq * n_train_steps)
+        
         # eval after
-        # print('2', os.system('nvidia-smi'))
-
         mean_reward_prev = mean_reward
         total_reward = parallel_eval_session.run_eval(
             dest=os.path.join(
@@ -228,19 +208,17 @@ def session(
         mean_reward = split_evaluation(total_reward, n_parallel, population_size)
 
         if self_play:
-
             agents[0].save_weights(
-                os.path.join(output_dir, "weights", "pos_0"))
+                os.path.join(output_dir, "weights", "pos_0"), mean_reward)
             if epoch % lifespan == 0:
                 choose_fittest(mean_reward, discard_perc, agents[0])
         else:
             for aid, agent in enumerate(agents):
                 agent.save_weights(
-                    os.path.join(output_dir, "weights", "pos_" + str(aid)))
+                    os.path.join(output_dir, "weights", "pos_" + str(aid)), mean_reward)
                 #TODO: Questionable for non-selfplay --> just one agent?
                 if epoch % lifespan == 0:
                     choose_fittest(mean_reward, discard_perc, agent)
-        print('pbt_session status: 4')
 
         # if epoch % (100000 // eval_freq) == 0:
         #     if self_play:
