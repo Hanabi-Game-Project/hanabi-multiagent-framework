@@ -1,7 +1,7 @@
 # defining the session
 session.n_parallel = 1
 session.n_parallel_eval = 1000
-session.epochs = 3500
+session.epochs = 1
 
 # define schedule for annealing of beta_is
 schedule_beta_is.value_start = 0.4
@@ -27,4 +27,14 @@ agent_0/RlaxRainbowParams.history_size           = 1
 
 agent_0/RewardShapingParams.min_play_probability = 0
 agent_0/RewardShapingParams.w_play_probability	 = 0
-agent_0/RewardShapingParams.penalty_last_of_kind = 0.5
+agent_0/RewardShapingParams.penalty_last_of_kind = 0
+
+agent_0/PBTParams.population_size                = 1
+agent_0/PBTParams.discard_percent                = 0.8
+agent_0/PBTParams.lr_factor                      = 0.2
+agent_0/PBTParams.lr_start_value                 = 6.25e-5
+agent_0/PBTParams.buffersize_start_factor        = 4
+agent_0/PBTParams.buffersize_factor              = 2
+agent_0/PBTParams.individual_reward_shaping      = False
+agent_0/PBTParams.life_span                      = 100
+agent_0/PBTParams.generations                    = 35

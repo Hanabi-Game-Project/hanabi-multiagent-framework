@@ -46,8 +46,8 @@ def session(
             hanabi_game_type="Hanabi-Small",
             n_players: int = 2,
             max_life_tokens: int = None,
-            n_parallel: int = 32,
-            n_parallel_eval:int = 256,
+            n_parallel: int = 256,
+            n_parallel_eval:int = 2048,
             n_train_steps: int = 1,
             n_sim_steps: int = 1,
             epochs: int = 1_000,
@@ -168,6 +168,7 @@ def session(
     total_reward = parallel_eval_session.run_eval()
     mean_reward = split_evaluation(total_reward, n_parallel, population_size)
 
+    start_time = time.time()
     # train
     parallel_session.train(
         n_iter=eval_freq,
@@ -210,15 +211,18 @@ def session(
         if self_play:
             agents[0].save_weights(
                 os.path.join(output_dir, "weights", "pos_0"), mean_reward)
-            if epoch % lifespan == 0:
+            if epoch > 0 && epoch % lifespan == 0:
                 choose_fittest(mean_reward, discard_perc, agents[0])
         else:
             for aid, agent in enumerate(agents):
                 agent.save_weights(
                     os.path.join(output_dir, "weights", "pos_" + str(aid)), mean_reward)
                 #TODO: Questionable for non-selfplay --> just one agent?
-                if epoch % lifespan == 0:
+                if epoch > 0 && epoch % lifespan == 0:
                     choose_fittest(mean_reward, discard_perc, agent)
+
+        logger.info("epoch {}: duration={}s    reward={}".format(epoch, time.time()-start_time, mean_reward))
+        start_time = time.time()
 
         # if epoch % (100000 // eval_freq) == 0:
         #     if self_play:
