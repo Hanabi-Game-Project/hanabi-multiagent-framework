@@ -42,7 +42,7 @@ def session(
             hanabi_game_type="Hanabi-Small",
             n_players: int = 2,
             max_life_tokens: int = None,
-            n_parallel: int = 256,
+            n_parallel: int = 320,
             n_parallel_eval:int = 2048,
             n_train_steps: int = 1,
             n_sim_steps: int = 2,
@@ -61,28 +61,32 @@ def session(
     input_dict = input_.get()
 
     os.environ["CUDA_VISIBLE_DEVICES"] = input_dict['gpu']
+    epoch_circle = input_dict['epoch_circle']
 
     population_params = PBTParams()
     population_size = population_params.population_size
     discard_perc = population_params.discard_percent
     lifespan = population_params.life_span
-    ########### debugging##########
-    print(output_dir)
-    shutil.rmtree(output_dir)
+    pbt_epochs = int(epochs / population_params.generations)
 
-    os.makedirs(output_dir)
-    ###############################
-    os.makedirs(os.path.join(output_dir, "weights"))
-    os.makedirs(os.path.join(output_dir, "stats"))
-    for i in range(n_players):
-        os.makedirs(os.path.join(output_dir, "weights", "pos_" + str(i)))
-        for j in range(population_size):
-            os.makedirs(os.path.join(output_dir, "weights","pos_" + str(i), "agent_" + str(j)))
+        ########### debugging##########
+    if epoch_circle == 0:
+        print(output_dir)
+        shutil.rmtree(output_dir)
+
+        os.makedirs(output_dir)
+        ###############################
+        os.makedirs(os.path.join(output_dir, "weights"))
+        os.makedirs(os.path.join(output_dir, "stats"))
+        for i in range(n_players):
+            os.makedirs(os.path.join(output_dir, "weights", "pos_" + str(i)))
+            for j in range(population_size):
+                os.makedirs(os.path.join(output_dir, "weights","pos_" + str(i), "agent_" + str(j)))
 
 
-    #assert n_parallel and n_parallel_eval are multiples of popsize
-    assert n_parallel % population_size == 0, 'n_parallel has to be multiple of pop_size'
-    assert n_parallel_eval % population_size == 0, 'n_parallel_eval has to be multiple of pop_size'
+        #assert n_parallel and n_parallel_eval are multiples of popsize
+        assert n_parallel % population_size == 0, 'n_parallel has to be multiple of pop_size'
+        assert n_parallel_eval % population_size == 0, 'n_parallel_eval has to be multiple of pop_size'
 
 
     '''################################################################################################################
@@ -160,9 +164,7 @@ def session(
     4. Initialize managing-agents containing atomic sub-agents with parallel sessions.
     '''
     if self_play:
-        
         with gin.config_scope('agent_0'):
-
             self_play_agent = load_agent(env)
             agents = [self_play_agent for _ in range(n_players)]
     # TODO: --later-- non-self-play
@@ -185,55 +187,58 @@ def session(
     mean_reward_prev = np.zeros(population_size)
     total_reward = parallel_eval_session.run_eval()
     mean_reward = split_evaluation(total_reward, n_parallel, population_size)
-    # start_time = time.time()
-    # # train
-    # parallel_session.train(
-    #     n_iter=eval_freq,
-    #     n_sim_steps=n_sim_steps,
-    #     n_train_steps=n_train_steps,
-    #     n_warmup=int(256 * 5 * n_players / n_sim_steps))
+    start_time = time.time()
+    # train
+    if epoch_circle == 0:
+        parallel_session.train(
+            n_iter=eval_freq,
+            n_sim_steps=n_sim_steps,
+            n_train_steps=n_train_steps,
+            n_warmup=int(256 * 5 * n_players / n_sim_steps))
 
-    # print("step", 1 * eval_freq * n_train_steps)
-    # # eval
-    # mean_reward_prev = mean_reward
-    # total_reward = parallel_eval_session.run_eval(dest=os.path.join(output_dir, "stats_0"))
-    # mean_reward= split_evaluation(total_reward, n_parallel, population_size)
+        print("step", 1 * eval_freq * n_train_steps)
+        # eval
+        mean_reward_prev = mean_reward
+        total_reward = parallel_eval_session.run_eval(dest=os.path.join(output_dir, "stats_0"))
+        mean_reward= split_evaluation(total_reward, n_parallel, population_size)
 
-    # if self_play:
-    #     agents[0].save_weights(
-    #         os.path.join(output_dir, "weights","pos_0"), mean_reward)
-    # else:
-    #     for aid, agent in enumerate(agents):
-    #         agent.save_weights(
-    #             os.path.join(output_dir, "weights","pos_" + str(aid)), mean_reward)
+        if self_play:
+            agents[0].save_weights(
+                os.path.join(output_dir, "weights","pos_0"), mean_reward)
+        else:
+            for aid, agent in enumerate(agents):
+                agent.save_weights(
+                    os.path.join(output_dir, "weights","pos_" + str(aid)), mean_reward)
+        print('Epoch took {} seconds!'.format(time.time() - start_time))
 
-    # for epoch in range(epochs):
+    for epoch in range(pbt_epochs):
+        start_time = time.time()
 
-    #     parallel_session.train(
-    #         n_iter=eval_freq,
-    #         n_sim_steps=n_sim_steps,
-    #         n_train_steps=n_train_steps,
-    #         n_warmup=0)
-    #     print("step", (epoch + 2) * eval_freq * n_train_steps)
+        parallel_session.train(
+            n_iter=eval_freq,
+            n_sim_steps=n_sim_steps,
+            n_train_steps=n_train_steps,
+            n_warmup=0)
+        print("step", (epoch_circle * pbt_epochs + (epoch + 2)) * eval_freq * n_train_steps)
         
-    #     # eval after
-    #     mean_reward_prev = mean_reward
-    #     total_reward = parallel_eval_session.run_eval(
-    #         dest=os.path.join(
-    #             output_dir,
-    #             "stats", str(epoch + 1))
-    #         )
-    #     mean_reward = split_evaluation(total_reward, n_parallel, population_size)
+        # eval after
+        mean_reward_prev = mean_reward
+        total_reward = parallel_eval_session.run_eval(
+            dest=os.path.join(
+                output_dir,
+                "stats", str(epoch_circle * pbt_epochs +(epoch + 1)))
+            )
+        mean_reward = split_evaluation(total_reward, n_parallel, population_size)
 
-    #     if self_play:
-    #         agents[0].save_weights(
-    #             os.path.join(output_dir, "weights", "pos_0"), mean_reward)
-    #     else:
-    #         for aid, agent in enumerate(agents):
-    #             agent.save_weights(
-    #                 os.path.join(output_dir, "weights", "pos_" + str(aid)), mean_reward)
-    #             #TODO: Questionable for non-selfplay --> just one agent?
-
+        if self_play:
+            agents[0].save_weights(
+                os.path.join(output_dir, "weights", "pos_0"), mean_reward)
+        else:
+            for aid, agent in enumerate(agents):
+                agent.save_weights(
+                    os.path.join(output_dir, "weights", "pos_" + str(aid)), mean_reward)
+                #TODO: Questionable for non-selfplay --> just one agent?
+        print('Epoch took {} seconds!'.format(time.time() - start_time))
         # logger.info("epoch {}: duration={}s    reward={}".format(epoch, time.time()-start_time, mean_reward))
         # start_time = time.time()
 
@@ -255,7 +260,8 @@ def session(
         #                 os.path.join(output_dir, "weights", "agent_" + str(aid)), "best")
 
     # to_put = [agents[0].save_characteristics(), eps_schedule, beta_is_schedule]
-    q.put([agents[0].save_characteristics()])
+    epoch_circle += 1
+    q.put([[agents[0].save_characteristics()], epoch_circle])
     # q.put(to_put)
     # q.put([agents[0].save_characteristics(), eps_schedule, beta_is_schedule])
 
@@ -280,7 +286,7 @@ def evaluation_session(input_,
 
     def concatenate_agent_data(data_lists):
         all_agents = {'online_weights' : [], 'trg_weights' : [],
-            'opt_states' : [], 'experience' : [], 'parameters' : [[],[]]}
+            'opt_states' : [], 'experience' : [], 'parameters' : [[],[], []]}
         for elem in data_lists:
             all_agents['online_weights'].append(elem['online_weights'])
             all_agents['trg_weights'].append(elem['trg_weights'])
@@ -288,13 +294,14 @@ def evaluation_session(input_,
             all_agents['experience'].append(elem['experience'])
             all_agents['parameters'][0].append(elem['parameters'][0])
             all_agents['parameters'][1].append(elem['parameters'][1])
+            all_agents['parameters'][2].append(elem['parameters'][2])
         return all_agents
     
     def separate_agent(agent, split_no = 2):
         """Split the sigle dictionary back to several to then distribute on different GPUs"""
         agent_data = agent.save_characteristics()
         return_data = [{'online_weights' : [], 'trg_weights' : [],
-            'opt_states' : [], 'experience' : [], 'parameters' : [[],[]]} for i in range(split_no)]
+            'opt_states' : [], 'experience' : [], 'parameters' : [[],[], []]} for i in range(split_no)]
         length = int(len(agent_data['online_weights'])/split_no)
 
         for i in range(split_no):
@@ -304,6 +311,7 @@ def evaluation_session(input_,
             return_data[i]['experience'].append(agent_data['experience'][i*length : (i+1)*length])
             return_data[i]['parameters'][0].append(agent_data['parameters'][0][i*length : (i+1)*length])
             return_data[i]['parameters'][1].append(agent_data['parameters'][1][i*length : (i+1)*length])
+            return_data[i]['parameters'][2].append(agent_data['parameters'][2][i*length : (i+1)*length])
         return return_data
     
     def choose_fittest(mean_reward, discard_perc, agent):
@@ -341,7 +349,9 @@ def evaluation_session(input_,
     if agent_config_path is not None:
         gin.parse_config_file(agent_config_path)
 
-    agent_data = input_.get()['agent_data']
+    input_dict = input_.get()
+    agent_data = input_dict['agent_data']
+    epoch_circle = input_dict['epoch_circle']
 
     env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
     if max_life_tokens is not None:
@@ -349,12 +359,6 @@ def evaluation_session(input_,
     eval_env = hmf.HanabiParallelEnvironment(env_conf, n_parallel_eval)
 
     all_agent_data = concatenate_agent_data(agent_data)
-    # print(all_agent_data['online_weights'][0])
-    # print(type(all_agent_data['online_weights'][0][0]))
-    # for elem in all_agent_data['online_weights'][0][0]:
-    #     for  item in elem:
-    #         print(' has shape {}'.format( item))
-
 
     if self_play:
         with gin.config_scope('agent_0'):
@@ -375,17 +379,16 @@ def evaluation_session(input_,
     population_size = population_params.population_size
     discard_perc = population_params.discard_percent
     lifespan = population_params.life_span
-    total_reward = parallel_eval_session.run_eval(dest=os.path.join(output_dir, "pbt_0"))
+    total_reward = parallel_eval_session.run_eval(dest=os.path.join(output_dir, "pbt_{}".format(epoch_circle)))
     mean_reward = split_evaluation(total_reward, n_parallel, population_size)
     agents[0].pbt_eval(mean_reward)
     # choose_fittest(mean_reward, discard_perc, agents[0])
     return_data = separate_agent(agents[0])
-    time.sleep(5)
+
     output_.put(return_data)
 
 def training_run(agent_data = [], 
-                # eps_schedule = None, 
-                # beta_is_schedule = None
+                epoch_circle = 0
                 ):
 
     input_ = Queue()
@@ -393,8 +396,7 @@ def training_run(agent_data = [],
     processes = []
     for i in range(2):
         input_data = {'agent_data' : agent_data[i], 
-                    # 'eps_schedule' : eps_schedule, 
-                    # 'beta_is_schedule' : beta_is_schedule, 
+                    'epoch_circle' : epoch_circle, 
                     'gpu' : str(0)}
         input_.put(input_data)
         output_dir = (args.output_dir + '_{}'.format(i))
@@ -408,15 +410,14 @@ def training_run(agent_data = [],
     agent_data = []
     for p in processes:
         ret = output.get() # will block
-        agent_data.append(ret[0])
+        agent_data.append(ret[0][0])
 
     for p in processes:
         p.join()
-    return agent_data
+    return agent_data, ret[1]
 
 def evaluation_run(agent_data = [], 
-                # eps_schedule = None, 
-                # beta_is_schedule = None
+                epoch_circle = 0
                 ):
 
     input_ = Queue()
@@ -448,29 +449,18 @@ def evaluation_run(agent_data = [],
 
 
 def main(args):
-    # print('LLLLLLLLLLLLLL', a, b, c)
     # load configuration from gin file
     if args.agent_config_path is not None:
-        gin.parse_config_file(args.agent_config.path)
+        gin.parse_config_file(args.agent_config_path)
     
-    # del args.agent_config_path
-    # session({'self_play' : a, 'output_dir' : c})
-    # print('session passed')
-
-    # print(**vars(args))
     pbtparams = PBTParams()
     agent_data = [[],[]]
-    # eps_schedule = None
-    # beta_is_schedule = None
 
+    epoch_circle = 0
     for gens in range(pbtparams.generations):
-        agent_data = training_run(agent_data)
+        agent_data = training_run(agent_data, epoch_circle)
 
-        # agent_data = training_run(agent_data)
         agent_data = evaluation_run(agent_data)
-
-        time.sleep(5)
-        # evaluation_session(agent_data)
 
 
             
