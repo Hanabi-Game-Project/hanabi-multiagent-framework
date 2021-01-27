@@ -64,7 +64,7 @@ def session(
     epoch_circle = input_dict['epoch_circle']
 
     population_params = PBTParams()
-    population_size = population_params.population_size
+    population_size = population_params.population_size / 2
     discard_perc = population_params.discard_percent
     lifespan = population_params.life_span
     pbt_epochs = int(epochs / population_params.generations)
@@ -238,7 +238,7 @@ def session(
                 agent.save_weights(
                     os.path.join(output_dir, "weights", "pos_" + str(aid)), mean_reward)
                 #TODO: Questionable for non-selfplay --> just one agent?
-        print('Epoch took {} seconds!'.format(time.time() - start_time))
+        print('Epoch {} took {} seconds!'.format(epoch, time.time() - start_time))
         # logger.info("epoch {}: duration={}s    reward={}".format(epoch, time.time()-start_time, mean_reward))
         # start_time = time.time()
 
@@ -427,6 +427,7 @@ def evaluation_run(agent_data = [],
     input_data = {'agent_data' : agent_data, 
                 # 'eps_schedule' : eps_schedule, 
                 # 'beta_is_schedule' : beta_is_schedule, 
+                'epoch_circle' : epoch_circle
                 }
     input_.put(input_data)
     output_dir = (args.output_dir + '_{}'.format('pbt'))
@@ -458,9 +459,9 @@ def main(args):
 
     epoch_circle = 0
     for gens in range(pbtparams.generations):
-        agent_data = training_run(agent_data, epoch_circle)
+        agent_data, epoch_circle = training_run(agent_data, epoch_circle)
 
-        agent_data = evaluation_run(agent_data)
+        agent_data = evaluation_run(agent_data, epoch_circle)
 
 
             
