@@ -80,7 +80,7 @@ def session(
             os.makedirs(os.path.join(output_dir, "weights", "pos_" + str(i)))
             for j in range(population_size):
                 os.makedirs(os.path.join(output_dir, "weights","pos_" + str(i), "agent_" + str(j)))
-
+        pbt_counter = np.zeros(population_size) + 50
 
         #assert n_parallel and n_parallel_eval are multiples of popsize
         assert n_parallel % population_size == 0, 'n_parallel has to be multiple of pop_size'
@@ -326,7 +326,6 @@ def evaluation_session(input_,
     agent_data = input_dict['agent_data']
     epoch_circle = input_dict['epoch_circle']
     pbt_counter = input_dict['pbt_counter']
-    print('pbt_session line 329', pbt_counter)
 
     env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
     if max_life_tokens is not None:
