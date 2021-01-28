@@ -43,10 +43,10 @@ def session(
             n_players: int = 2,
             max_life_tokens: int = None,
             n_parallel: int = 320,
-            n_parallel_eval:int = 2048,
+            n_parallel_eval:int = 2000,
             n_train_steps: int = 1,
             n_sim_steps: int = 2,
-            epochs: int = 3500,
+            epochs: int = 350,
             eval_freq: int = 500,
     ):
 
@@ -62,9 +62,10 @@ def session(
 
     os.environ["CUDA_VISIBLE_DEVICES"] = input_dict['gpu']
     epoch_circle = input_dict['epoch_circle']
+    pbt_counter = input_dict['pbt_counter']
 
     population_params = PBTParams()
-    population_size = population_params.population_size / 2
+    population_size = int(population_params.population_size / 2)
     discard_perc = population_params.discard_percent
     lifespan = population_params.life_span
     pbt_epochs = int(epochs / population_params.generations)
@@ -175,6 +176,8 @@ def session(
         ...
         agents = [agent_1]
 
+    agents[0].pbt_counter = pbt_counter
+
     parallel_session = hmf.HanabiParallelSession(env, agents)
     parallel_session.reset()
     parallel_eval_session = hmf.HanabiParallelSession(eval_env, agents)
@@ -211,34 +214,36 @@ def session(
                     os.path.join(output_dir, "weights","pos_" + str(aid)), mean_reward)
         print('Epoch took {} seconds!'.format(time.time() - start_time))
 
-    for epoch in range(pbt_epochs):
-        start_time = time.time()
+    # for epoch in range(pbt_epochs):
+    #     start_time = time.time()
 
-        parallel_session.train(
-            n_iter=eval_freq,
-            n_sim_steps=n_sim_steps,
-            n_train_steps=n_train_steps,
-            n_warmup=0)
-        print("step", (epoch_circle * pbt_epochs + (epoch + 2)) * eval_freq * n_train_steps)
+    #     agents[0].increase_pbt_counter()
+
+    #     parallel_session.train(
+    #         n_iter=eval_freq,
+    #         n_sim_steps=n_sim_steps,
+    #         n_train_steps=n_train_steps,
+    #         n_warmup=0)
+    #     print("step", (epoch_circle * pbt_epochs + (epoch + 2)) * eval_freq * n_train_steps)
         
-        # eval after
-        mean_reward_prev = mean_reward
-        total_reward = parallel_eval_session.run_eval(
-            dest=os.path.join(
-                output_dir,
-                "stats", str(epoch_circle * pbt_epochs +(epoch + 1)))
-            )
-        mean_reward = split_evaluation(total_reward, n_parallel, population_size)
+    #     # eval after
+    #     mean_reward_prev = mean_reward
+    #     total_reward = parallel_eval_session.run_eval(
+    #         dest=os.path.join(
+    #             output_dir,
+    #             "stats", str(epoch_circle * pbt_epochs +(epoch + 1)))
+    #         )
+    #     mean_reward = split_evaluation(total_reward, n_parallel, population_size)
 
-        if self_play:
-            agents[0].save_weights(
-                os.path.join(output_dir, "weights", "pos_0"), mean_reward)
-        else:
-            for aid, agent in enumerate(agents):
-                agent.save_weights(
-                    os.path.join(output_dir, "weights", "pos_" + str(aid)), mean_reward)
-                #TODO: Questionable for non-selfplay --> just one agent?
-        print('Epoch {} took {} seconds!'.format(epoch, time.time() - start_time))
+    #     if self_play:
+    #         agents[0].save_weights(
+    #             os.path.join(output_dir, "weights", "pos_0"), mean_reward)
+    #     else:
+    #         for aid, agent in enumerate(agents):
+    #             agent.save_weights(
+    #                 os.path.join(output_dir, "weights", "pos_" + str(aid)), mean_reward)
+    #             #TODO: Questionable for non-selfplay --> just one agent?
+    #     print('Epoch {} took {} seconds!'.format(epoch, time.time() - start_time))
         # logger.info("epoch {}: duration={}s    reward={}".format(epoch, time.time()-start_time, mean_reward))
         # start_time = time.time()
 
@@ -261,7 +266,7 @@ def session(
 
     # to_put = [agents[0].save_characteristics(), eps_schedule, beta_is_schedule]
     epoch_circle += 1
-    q.put([[agents[0].save_characteristics()], epoch_circle])
+    q.put([[agents[0].save_characteristics()], epoch_circle, agents[0].pbt_counter])
     # q.put(to_put)
     # q.put([agents[0].save_characteristics(), eps_schedule, beta_is_schedule])
 
@@ -276,10 +281,10 @@ def evaluation_session(input_,
             hanabi_game_type="Hanabi-Small",
             n_players: int = 2,
             max_life_tokens: int = None,
-            n_parallel: int = 256,
-            n_parallel_eval:int = 2048,
+            n_parallel: int = 320,
+            n_parallel_eval:int = 2000,
             n_train_steps: int = 1,
-            n_sim_steps: int = 1,
+            n_sim_steps: int = 2,
             epochs: int = 1,
             eval_freq: int = 500,
         ):
@@ -288,13 +293,13 @@ def evaluation_session(input_,
         all_agents = {'online_weights' : [], 'trg_weights' : [],
             'opt_states' : [], 'experience' : [], 'parameters' : [[],[], []]}
         for elem in data_lists:
-            all_agents['online_weights'].append(elem['online_weights'])
-            all_agents['trg_weights'].append(elem['trg_weights'])
-            all_agents['opt_states'].append(elem['opt_states'])
-            all_agents['experience'].append(elem['experience'])
-            all_agents['parameters'][0].append(elem['parameters'][0])
-            all_agents['parameters'][1].append(elem['parameters'][1])
-            all_agents['parameters'][2].append(elem['parameters'][2])
+            all_agents['online_weights'].extend(elem['online_weights'])
+            all_agents['trg_weights'].extend(elem['trg_weights'])
+            all_agents['opt_states'].extend(elem['opt_states'])
+            all_agents['experience'].extend(elem['experience'])
+            all_agents['parameters'][0].extend(elem['parameters'][0])
+            all_agents['parameters'][1].extend(elem['parameters'][1])
+            all_agents['parameters'][2].extend(elem['parameters'][2])
         return all_agents
     
     def separate_agent(agent, split_no = 2):
@@ -352,6 +357,7 @@ def evaluation_session(input_,
     input_dict = input_.get()
     agent_data = input_dict['agent_data']
     epoch_circle = input_dict['epoch_circle']
+    pbt_counter = input_dict['pbt_counter']
 
     env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
     if max_life_tokens is not None:
@@ -359,7 +365,12 @@ def evaluation_session(input_,
     eval_env = hmf.HanabiParallelEnvironment(env_conf, n_parallel_eval)
 
     all_agent_data = concatenate_agent_data(agent_data)
-
+    print(agent_data)
+    print(len(agent_data))
+    print(len(agent_data[1]['online_weights']))
+    print(len(agent_data[0]['online_weights']))
+    print(len(all_agent_data['online_weights']))
+    time.sleep(10)
     if self_play:
         with gin.config_scope('agent_0'):
             self_play_agent = load_agent(eval_env)
@@ -384,11 +395,12 @@ def evaluation_session(input_,
     agents[0].pbt_eval(mean_reward)
     # choose_fittest(mean_reward, discard_perc, agents[0])
     return_data = separate_agent(agents[0])
-
-    output_.put(return_data)
+    pbt_counter = agents[0].pbt_counter
+    output_.put((return_data, pbt_counter))
 
 def training_run(agent_data = [], 
-                epoch_circle = 0
+                epoch_circle = None,
+                pbt_counter = []
                 ):
 
     input_ = Queue()
@@ -397,6 +409,7 @@ def training_run(agent_data = [],
     for i in range(2):
         input_data = {'agent_data' : agent_data[i], 
                     'epoch_circle' : epoch_circle, 
+                    'pbt_counter' : pbt_counter[i],
                     'gpu' : str(0)}
         input_.put(input_data)
         output_dir = (args.output_dir + '_{}'.format(i))
@@ -408,16 +421,21 @@ def training_run(agent_data = [],
         processes.append(p)
         p.start()
     agent_data = []
+    pbt_counter = []
     for p in processes:
         ret = output.get() # will block
         agent_data.append(ret[0][0])
+        pbt_counter.append(ret[2])
 
     for p in processes:
         p.join()
-    return agent_data, ret[1]
+    pbt_counter = np.concatenate(pbt_counter)
+
+    return agent_data, ret[1], pbt_counter
 
 def evaluation_run(agent_data = [], 
-                epoch_circle = 0
+                epoch_circle = None,
+                pbt_counter = None
                 ):
 
     input_ = Queue()
@@ -425,8 +443,7 @@ def evaluation_run(agent_data = [],
     processes = []
 
     input_data = {'agent_data' : agent_data, 
-                # 'eps_schedule' : eps_schedule, 
-                # 'beta_is_schedule' : beta_is_schedule, 
+                'pbt_counter' : pbt_counter,
                 'epoch_circle' : epoch_circle
                 }
     input_.put(input_data)
@@ -440,11 +457,13 @@ def evaluation_run(agent_data = [],
                                     output_dir))
     processes.append(p)
     p.start()
-    agent_data = []
+    # agent_data = []
     
-    agent_data = output.get() # will block
+    eval_data = output.get() # will block
+    agent_data = eval_data[0]
+    pbt_counter = eval_data[1]
     p.join()
-    return agent_data
+    return agent_data, pbt_counter
 
 
 
@@ -456,12 +475,13 @@ def main(args):
     
     pbtparams = PBTParams()
     agent_data = [[],[]]
+    pbt_counter = np.zeros(pbtparams.population_size)
 
     epoch_circle = 0
     for gens in range(pbtparams.generations):
-        agent_data, epoch_circle = training_run(agent_data, epoch_circle)
+        agent_data, epoch_circle, pbt_counter = training_run(agent_data, epoch_circle, np.split(pbt_counter, 2))
 
-        agent_data = evaluation_run(agent_data, epoch_circle)
+        agent_data, pbt_counter = evaluation_run(agent_data, epoch_circle, pbt_counter)
 
 
             
