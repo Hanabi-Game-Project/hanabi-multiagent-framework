@@ -234,33 +234,10 @@ def session(
                 agent.save_weights(
                     os.path.join(output_dir, "weights", "pos_" + str(aid)), mean_reward)
                 #TODO: Questionable for non-selfplay --> just one agent?
-        print('Epoch {} took {} seconds!'.format((epoch + pbt_epochs * pbt_counter), time.time() - start_time))
-        # logger.info("epoch {}: duration={}s    reward={}".format(epoch, time.time()-start_time, mean_reward))
-        # start_time = time.time()
+        print('Epoch {} took {} seconds!'.format((epoch + pbt_epochs * epoch_circle), time.time() - start_time))
 
-        # if epoch % (100000 // eval_freq) == 0:
-        #     if self_play:
-        #         agents[0].save_weights(
-        #             os.path.join(output_dir, "weights", "agent_0"), "ckpt_" + str(agents[0].train_step))
-        #     else:
-        #         for aid, agent in enumerate(agents):
-        #             agent.save_weights(
-        #                 os.path.join(output_dir, "weights", "agent_" + str(aid)), "ckpt_" + str(agents[0].train_step))
-        # if mean_reward_prev < mean_reward:
-        #     if self_play:
-        #         agents[0].save_weights(
-        #             os.path.join(output_dir, "weights", "agent_0"), "best")
-        #     else:
-        #         for aid, agent in enumerate(agents):
-        #             agent.save_weights(
-        #                 os.path.join(output_dir, "weights", "agent_" + str(aid)), "best")
-
-    # to_put = [agents[0].save_characteristics(), eps_schedule, beta_is_schedule]
     epoch_circle += 1
     q.put([[agents[0].save_characteristics()], epoch_circle, agents[0].pbt_counter])
-    # q.put(to_put)
-    # q.put([agents[0].save_characteristics(), eps_schedule, beta_is_schedule])
-
 
 
 @gin.configurable(blacklist=['self_play'])
@@ -356,10 +333,7 @@ def evaluation_session(input_,
     eval_env = hmf.HanabiParallelEnvironment(env_conf, n_parallel_eval)
 
     all_agent_data = concatenate_agent_data(agent_data)
-    # print(len(agent_data[1]['online_weights']))
-    # print(len(agent_data[0]['online_weights']))
-    # print(len(all_agent_data['online_weights']))
-    # time.sleep(10)
+
     if self_play:
         with gin.config_scope('agent_0'):
             self_play_agent = load_agent(eval_env)
@@ -382,7 +356,7 @@ def evaluation_session(input_,
     total_reward = parallel_eval_session.run_eval(dest=os.path.join(output_dir, "pbt_{}".format(epoch_circle)))
     mean_reward = split_evaluation(total_reward, n_parallel, population_size)
     agents[0].pbt_eval(mean_reward)
-    # choose_fittest(mean_reward, discard_perc, agents[0])
+
     return_data = separate_agent(agents[0])
     pbt_counter = agents[0].pbt_counter
     output_.put((return_data, pbt_counter))
@@ -410,17 +384,17 @@ def training_run(agent_data = [],
         processes.append(p)
         p.start()
     agent_data = []
-    pbt_counter = []
+    pbt_counter_2 = []
     for p in processes:
         ret = output.get() # will block
         agent_data.append(ret[0][0])
-        pbt_counter.append(ret[2])
+        pbt_counter_2.append(ret[2])
 
     for p in processes:
         p.join()
-    pbt_counter = np.concatenate(pbt_counter)
+    pbt_counter_2 = np.concatenate(pbt_counter_2)
 
-    return agent_data, ret[1], pbt_counter
+    return agent_data, ret[1], pbt_counter_2
 
 def evaluation_run(agent_data = [], 
                 epoch_circle = None,
@@ -437,8 +411,14 @@ def evaluation_run(agent_data = [],
                 }
     input_.put(input_data)
     output_dir = (args.output_dir + '_{}'.format('pbt'))
+
+
+    #########
     shutil.rmtree(output_dir)
     os.mkdir(output_dir)
+
+
+
     p = Process(target=evaluation_session, args=(input_, 
                                     output, 
                                     args.self_play, 
@@ -469,8 +449,11 @@ def main(args):
     epoch_circle = 0
     for gens in range(pbtparams.generations):
         agent_data, epoch_circle, pbt_counter = training_run(agent_data, epoch_circle, np.split(pbt_counter, 2))
-
+        print('pbt_counter after training {}'.format(pbt_counter))
+        time.sleep(5)
         agent_data, pbt_counter = evaluation_run(agent_data, epoch_circle, pbt_counter)
+        print('pbt_counter before trianing {}'.format(pbt_counter))
+        time.sleep(5)
 
 
             
