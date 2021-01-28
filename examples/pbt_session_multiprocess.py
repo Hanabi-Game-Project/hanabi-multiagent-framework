@@ -305,13 +305,13 @@ def evaluation_session(input_,
         length = int(len(agent_data['online_weights'])/split_no)
 
         for i in range(split_no):
-            return_data[i]['online_weights'].append(agent_data['online_weights'][i*length : (i+1)*length])
-            return_data[i]['trg_weights'].append(agent_data['trg_weights'][i*length : (i+1)*length])
-            return_data[i]['opt_states'].append(agent_data['opt_states'][i*length : (i+1)*length])
-            return_data[i]['experience'].append(agent_data['experience'][i*length : (i+1)*length])
-            return_data[i]['parameters'][0].append(agent_data['parameters'][0][i*length : (i+1)*length])
-            return_data[i]['parameters'][1].append(agent_data['parameters'][1][i*length : (i+1)*length])
-            return_data[i]['parameters'][2].append(agent_data['parameters'][2][i*length : (i+1)*length])
+            return_data[i]['online_weights'].extend(agent_data['online_weights'][i*length : (i+1)*length])
+            return_data[i]['trg_weights'].extend(agent_data['trg_weights'][i*length : (i+1)*length])
+            return_data[i]['opt_states'].extend(agent_data['opt_states'][i*length : (i+1)*length])
+            return_data[i]['experience'].extend(agent_data['experience'][i*length : (i+1)*length])
+            return_data[i]['parameters'][0].extend(agent_data['parameters'][0][i*length : (i+1)*length])
+            return_data[i]['parameters'][1].extend(agent_data['parameters'][1][i*length : (i+1)*length])
+            return_data[i]['parameters'][2].extend(agent_data['parameters'][2][i*length : (i+1)*length])
         return return_data
     
     def choose_fittest(mean_reward, discard_perc, agent):
