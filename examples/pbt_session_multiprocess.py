@@ -326,6 +326,7 @@ def evaluation_session(input_,
     agent_data = input_dict['agent_data']
     epoch_circle = input_dict['epoch_circle']
     pbt_counter = input_dict['pbt_counter']
+    print('pbt_session line 329', pbt_counter)
 
     env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
     if max_life_tokens is not None:
@@ -355,6 +356,7 @@ def evaluation_session(input_,
     lifespan = population_params.life_span
     total_reward = parallel_eval_session.run_eval(dest=os.path.join(output_dir, "pbt_{}".format(epoch_circle)))
     mean_reward = split_evaluation(total_reward, n_parallel, population_size)
+    agents[0].pbt_counter = pbt_counter
     agents[0].pbt_eval(mean_reward)
 
     return_data = separate_agent(agents[0])
