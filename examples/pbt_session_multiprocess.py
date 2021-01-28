@@ -27,10 +27,6 @@ This is an example on how to run the PBT approach for training on DQN/Rainbow ag
 environment and distributing/merging obtained observations/actions to the actual agents.
 """
 
-
-
-
-
 # @gin.configurable(blacklist=['output_dir', 'self_play'])
 @gin.configurable(blacklist=[ 'self_play'])
 def session(
