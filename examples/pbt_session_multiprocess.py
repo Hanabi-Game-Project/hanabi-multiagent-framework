@@ -238,7 +238,7 @@ def session(
                 agent.save_weights(
                     os.path.join(output_dir, "weights", "pos_" + str(aid)), mean_reward)
                 #TODO: Questionable for non-selfplay --> just one agent?
-        print('Epoch {} took {} seconds!'.format(epoch, time.time() - start_time))
+        print('Epoch {} took {} seconds!'.format((epoch + pbt_epochs * pbt_counter), time.time() - start_time))
         # logger.info("epoch {}: duration={}s    reward={}".format(epoch, time.time()-start_time, mean_reward))
         # start_time = time.time()
 
