@@ -160,7 +160,9 @@ def session(
     if self_play:
         with gin.config_scope('agent_0'):
             self_play_agent = load_agent(env)
-            self_play_agent.restore_characteristics(agent_data)
+            if epoch_circle > 0:
+                self_play_agent.restore_characteristics(agent_data)
+                self_play_agent.pbt_counter = pbt_counter
             agents = [self_play_agent for _ in range(n_players)]
     # TODO: --later-- non-self-play
     # else:
@@ -170,7 +172,6 @@ def session(
         # ...
         # agents = [agent_1]
 
-    agents[0].pbt_counter = pbt_counter
 
     parallel_session = hmf.HanabiParallelSession(env, agents)
     parallel_session.reset()
