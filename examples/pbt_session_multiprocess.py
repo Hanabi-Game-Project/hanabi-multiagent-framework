@@ -46,7 +46,7 @@ def session(
             n_parallel_eval:int = 2000,
             n_train_steps: int = 1,
             n_sim_steps: int = 2,
-            epochs: int = 70,
+            epochs: int = 3500,
             eval_freq: int = 500,
     ):
 
@@ -63,6 +63,7 @@ def session(
     os.environ["CUDA_VISIBLE_DEVICES"] = input_dict['gpu']
     epoch_circle = input_dict['epoch_circle']
     pbt_counter = input_dict['pbt_counter']
+    agent_data = input_dict['agent_data']
 
     population_params = PBTParams()
     population_size = int(population_params.population_size / 2)
@@ -146,14 +147,6 @@ def session(
     '''################################################################################################################
     3. Initialize environments to play with
     '''
-
-    # if input_dict['eps_schedule'] == None:
-    #     eps_schedule = create_exp_decay_scheduler(0.5, 0.01, 200000, 2000000)
-    #     beta_is_schedule = create_linear_scheduler(0.0, 1.0, 25e-7 / 4)
-    # else:
-    #     eps_schedule = input_dict['eps_schedule']
-    #     beta_is_schedule = input_dict['beta_is_scheduler']
-
     env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
     if max_life_tokens is not None:
         env_conf["max_life_tokens"] = str(max_life_tokens)
@@ -167,6 +160,7 @@ def session(
     if self_play:
         with gin.config_scope('agent_0'):
             self_play_agent = load_agent(env)
+            self_play_agent.restore_characteristics(agent_data)
             agents = [self_play_agent for _ in range(n_players)]
     # TODO: --later-- non-self-play
     # else:
