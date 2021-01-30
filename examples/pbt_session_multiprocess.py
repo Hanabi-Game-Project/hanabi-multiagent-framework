@@ -357,6 +357,8 @@ def evaluation_session(input_,
     mean_reward = split_evaluation(total_reward, n_parallel, population_size)
     agents[0].pbt_counter = pbt_counter
     agents[0].pbt_eval(mean_reward)
+    for i, agent in enumerate(agents[0].agents):
+        print('agent_{} is object {}'.format(i, agent))
 
     return_data = separate_agent(agents[0])
     pbt_counter = agents[0].pbt_counter
