@@ -1,7 +1,7 @@
 # defining the session
-session.n_parallel                               = 40
+session.n_parallel                               = 320
 session.n_parallel_eval                          = 1000
-session.epochs                                   = 35
+session.epochs                                   = 3500
 
 # define schedule for annealing of beta_is
 #schedule_beta_is.value_start                    = 0.4
@@ -9,7 +9,7 @@ session.epochs                                   = 35
 #schedule_beta_is.epochs                         = 3500
 
 # define the agent parameters
-agent_0/RlaxRainbowParams.train_batch_size       = 128
+agent_0/RlaxRainbowParams.train_batch_size       = 256
 agent_0/RlaxRainbowParams.target_update_period   = 500
 agent_0/RlaxRainbowParams.discount               = 0.99
 agent_0/RlaxRainbowParams.epsilon                = 0.0
@@ -17,7 +17,7 @@ agent_0/RlaxRainbowParams.learning_rate          = 6.25e-5
 agent_0/RlaxRainbowParams.layers                 = [512, 512]
 agent_0/RlaxRainbowParams.use_double_q           = True
 agent_0/RlaxRainbowParams.use_priority           = False
-agent_0/RlaxRainbowParams.experience_buffer_size = 65536
+agent_0/RlaxRainbowParams.experience_buffer_size = 2**15
 agent_0/RlaxRainbowParams.seed                   = 42
 agent_0/RlaxRainbowParams.n_atoms                = 31 # for hanabi small
 agent_0/RlaxRainbowParams.atom_vmax              = 15 # for hanabi small
@@ -25,16 +25,16 @@ agent_0/RlaxRainbowParams.atom_vmax              = 15 # for hanabi small
 agent_0/RlaxRainbowParams.priority_w			 = 0.6
 agent_0/RlaxRainbowParams.history_size           = 1
 
-agent_0/PBTParams.population_size                = 4
+agent_0/PBTParams.population_size                = 20
 agent_0/PBTParams.discard_percent                = 0.8
 agent_0/PBTParams.individual_reward_shaping      = False
-agent_0/PBTParams.life_span                      = 0
-agent_0/PBTParams.generations                    = 35
-agent_0/PBTParams.saver_threshold                = 0.1
+agent_0/PBTParams.life_span                      = 99
+agent_0/PBTParams.generations                    = 70
+agent_0/PBTParams.saver_threshold                = 13
 agent_0/PBTParams.pool_path                      = 'pool'
-agent_0/PBTParams.db_path                        = 'obs.db'
-agent_0/PBTParams.w_diversity                    = 10
-agent_0/PBTParams.obs_no                         = 10000
+agent_0/PBTParams.db_path                        = 'mnt/raid/ni/hanabi/obs.db'
+agent_0/PBTParams.w_diversity                    = 5
+agent_0/PBTParams.obs_no                         = 50000
 agent_0/PBTParams.n_mean                         = 5
 
 agent_0/RewardShapingParams.use_reward_shaping   = False
@@ -50,12 +50,12 @@ agent_0/PBTParams.change_learning_rate           = True
 agent_0/PBTParams.lr_factor                      = 0.2
 agent_0/PBTParams.lr_start_value                 = 6.25e-5
 
-agent_0/PBTParams.change_min_play_probability    = True
-agent_0/PBTParams.change_w_play_probability      = True
+agent_0/PBTParams.change_min_play_probability    = False
+agent_0/PBTParams.change_w_play_probability      = False
 agent_0/PBTParams.min_play_probability_pbt       = 0.05
 agent_0/PBTParams.w_play_probability_pbt         = 0.05
 
-agent_0/PBTParams.change_penalty_last_of_kind    = True
+agent_0/PBTParams.change_penalty_last_of_kind    = False
 agent_0/PBTParams.penalty_last_of_kind_pbt       = 0.1
 
 
