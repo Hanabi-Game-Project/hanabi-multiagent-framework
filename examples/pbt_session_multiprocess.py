@@ -17,9 +17,9 @@ from multiprocessing import Pool, Process, Queue
 import multiprocessing
 
 
-# ray.init(num_gpus =1)
+
 # os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.2"
-# os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir=/mnt/antares_raid/home/maltes/miniconda/envs/RL"
+os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir=/mnt/antares_raid/home/maltes/miniconda/envs/RL"
 
 
 """
@@ -50,7 +50,7 @@ def session(
     '''################################################################################################################
     1. Make directory-structure to save checkpoints and stats.
     '''
-
+    print(agent_config_path, n_parallel)
     if agent_config_path is not None:
         gin.parse_config_file(agent_config_path)
 
@@ -61,7 +61,8 @@ def session(
     pbt_counter = input_dict['pbt_counter']
     agent_data = input_dict['agent_data']
 
-    population_params = PBTParams()
+    with gin.config_scope('agent_0'):
+        population_params = PBTParams()
     population_size = int(population_params.population_size / 2)
     discard_perc = population_params.discard_percent
     lifespan = population_params.life_span
@@ -69,8 +70,8 @@ def session(
 
         ########### debugging##########
     if epoch_circle == 0:
-        print(output_dir)
-        shutil.rmtree(output_dir)
+        # print(output_dir)
+        # shutil.rmtree(output_dir)
 
         os.makedirs(output_dir)
         ###############################
@@ -92,13 +93,13 @@ def session(
     '''
 
     def load_agent(env):
-    
-        reward_shaping_params = RewardShapingParams()
+        with gin.config_scope('agent_0'):
+            agent_params = RlaxRainbowParams()
+            reward_shaping_params = RewardShapingParams()
         # reward_shaper = RewardShaper(reward_shaping_params)
-        population_params = PBTParams()
+            population_params = PBTParams()
         population_params = population_params._replace(population_size = int(population_params.population_size/2))
-
-        agent_params = RlaxRainbowParams()
+      
         print(agent_params)
         return AgentDQNPopulation(
                         env.num_states,
@@ -124,14 +125,15 @@ def session(
         return scheduler
 
 
-    def split_evaluation(total_reward, n_parallel, no_pbt_agents):
+    def split_evaluation(total_reward, no_pbt_agents, prev_rew):
         '''Assigns the total rewards from the different parallel states to the respective atomic agent'''
-        states_per_agent = int(n_parallel / no_pbt_agents)
+        states_per_agent = int(len(total_reward) / no_pbt_agents)
+        print('Splitting evaluations for {} states and {} agents!'.format(len(total_reward), no_pbt_agents))
         mean_reward = np.zeros(no_pbt_agents)
         for i in range(no_pbt_agents):
             mean_score = total_reward[i * states_per_agent: (i + 1) * states_per_agent].mean()
             mean_reward[i] = mean_score
-            print('Average score achieved by AGENT_{} = '.format(i), mean_score)
+            print('Average score achieved by AGENT_{} = {} & reward over past runs = {}'.format(i, mean_score, np.average(prev_rew, axis=1)[i]))
         return mean_reward
     
     def generation_scheduler(epochs, val_start = 50, val_end = 200):
@@ -139,6 +141,11 @@ def session(
         def scheduler(step):
             
             return scheduler
+
+    def add_reward( x, y):
+        x = np.roll(x, -1)
+        x[:,-1] = y
+        return x
 
     '''################################################################################################################
     3. Initialize environments to play with
@@ -178,11 +185,13 @@ def session(
     5. Start Training/Evaluation
     '''
     # eval before
-    mean_reward_prev = np.zeros(population_size)
+    mean_reward_prev = np.zeros((population_size, population_params.n_mean))
     total_reward = parallel_eval_session.run_eval()
-    mean_reward = split_evaluation(total_reward, n_parallel, population_size)
+    mean_reward = split_evaluation(total_reward, population_size, mean_reward_prev)
     start_time = time.time()
     # train
+
+
     if epoch_circle == 0:
         parallel_session.train(
             n_iter=eval_freq,
@@ -192,9 +201,9 @@ def session(
 
         print("step", 1 * eval_freq * n_train_steps)
         # eval
-        mean_reward_prev = mean_reward
+        mean_reward_prev = add_reward(mean_reward_prev, mean_reward)
         total_reward = parallel_eval_session.run_eval(dest=os.path.join(output_dir, "stats_0"))
-        mean_reward= split_evaluation(total_reward, n_parallel, population_size)
+        mean_reward= split_evaluation(total_reward, population_size, mean_reward_prev)
 
         if self_play:
             agents[0].save_weights(
@@ -218,13 +227,13 @@ def session(
         print("step", (epoch_circle * pbt_epochs + (epoch + 2)) * eval_freq * n_train_steps)
         
         # eval after
-        mean_reward_prev = mean_reward
+        mean_reward_prev = add_reward(mean_reward_prev, mean_reward)
         total_reward = parallel_eval_session.run_eval(
             dest=os.path.join(
                 output_dir,
                 "stats", str(epoch_circle * pbt_epochs +(epoch + 1)))
             )
-        mean_reward = split_evaluation(total_reward, n_parallel, population_size)
+        mean_reward = split_evaluation(total_reward, population_size, mean_reward_prev)
 
         if self_play:
             agents[0].save_weights(
@@ -237,7 +246,8 @@ def session(
         print('Epoch {} took {} seconds!'.format((epoch + pbt_epochs * epoch_circle), time.time() - start_time))
 
     epoch_circle += 1
-    q.put([[agents[0].save_characteristics()], epoch_circle, agents[0].pbt_counter])
+    mean_reward_prev = add_reward(mean_reward_prev, mean_reward)
+    q.put([[agents[0].save_characteristics()], epoch_circle, agents[0].pbt_counter, mean_reward_prev])
 
 
 @gin.configurable(blacklist=['self_play'])
@@ -250,7 +260,7 @@ def evaluation_session(input_,
             n_players: int = 2,
             max_life_tokens: int = None,
             n_parallel: int = 320,
-            n_parallel_eval:int = 2000,
+            n_parallel_eval:int = 10000,
             n_train_steps: int = 1,
             n_sim_steps: int = 2,
             epochs: int = 1,
@@ -259,7 +269,7 @@ def evaluation_session(input_,
 
     def concatenate_agent_data(data_lists):
         all_agents = {'online_weights' : [], 'trg_weights' : [],
-            'opt_states' : [], 'experience' : [], 'parameters' : [[],[], []]}
+            'opt_states' : [], 'experience' : [], 'parameters' : [[],[],[],[],[],[]]}
         for elem in data_lists:
             all_agents['online_weights'].extend(elem['online_weights'])
             all_agents['trg_weights'].extend(elem['trg_weights'])
@@ -268,13 +278,16 @@ def evaluation_session(input_,
             all_agents['parameters'][0].extend(elem['parameters'][0])
             all_agents['parameters'][1].extend(elem['parameters'][1])
             all_agents['parameters'][2].extend(elem['parameters'][2])
+            all_agents['parameters'][3].extend(elem['parameters'][3])
+            all_agents['parameters'][4].extend(elem['parameters'][4])
+            all_agents['parameters'][5].extend(elem['parameters'][5])
         return all_agents
     
     def separate_agent(agent, split_no = 2):
         """Split the sigle dictionary back to several to then distribute on different GPUs"""
         agent_data = agent.save_characteristics()
         return_data = [{'online_weights' : [], 'trg_weights' : [],
-            'opt_states' : [], 'experience' : [], 'parameters' : [[],[], []]} for i in range(split_no)]
+            'opt_states' : [], 'experience' : [], 'parameters' : [[],[],[],[],[],[]]} for i in range(split_no)]
         length = int(len(agent_data['online_weights'])/split_no)
 
         for i in range(split_no):
@@ -285,6 +298,9 @@ def evaluation_session(input_,
             return_data[i]['parameters'][0].extend(agent_data['parameters'][0][i*length : (i+1)*length])
             return_data[i]['parameters'][1].extend(agent_data['parameters'][1][i*length : (i+1)*length])
             return_data[i]['parameters'][2].extend(agent_data['parameters'][2][i*length : (i+1)*length])
+            return_data[i]['parameters'][3].extend(agent_data['parameters'][3][i*length : (i+1)*length])
+            return_data[i]['parameters'][4].extend(agent_data['parameters'][4][i*length : (i+1)*length])
+            return_data[i]['parameters'][5].extend(agent_data['parameters'][5][i*length : (i+1)*length])
         return return_data
     
     def choose_fittest(mean_reward, discard_perc, agent):
@@ -294,9 +310,9 @@ def evaluation_session(input_,
         index_survivor = np.argpartition(-mean_reward, no_fittest)[:no_fittest]
         agent.survival_fittest(index_survivor, index_loser)
 
-    def split_evaluation(total_reward, n_parallel, no_pbt_agents):
+    def split_evaluation(total_reward, no_pbt_agents):
         '''Assigns the total rewards from the different parallel states to the respective atomic agent'''
-        states_per_agent = int(n_parallel / no_pbt_agents)
+        states_per_agent = int(len(total_reward) / no_pbt_agents)
         mean_reward = np.zeros(no_pbt_agents)
         for i in range(no_pbt_agents):
             mean_score = total_reward[i * states_per_agent: (i + 1) * states_per_agent].mean()
@@ -305,11 +321,11 @@ def evaluation_session(input_,
         return mean_reward
 
     def load_agent(env):
-        
-        reward_shaping_params = RewardShapingParams()
-        population_params = PBTParams()
-
-        agent_params = RlaxRainbowParams()
+        with gin.config_scope('agent_0'):
+      
+            reward_shaping_params = RewardShapingParams()
+            population_params = PBTParams()
+            agent_params = RlaxRainbowParams()
         print(agent_params)
         return AgentDQNPopulation(
                         env.num_states,
@@ -319,6 +335,11 @@ def evaluation_session(input_,
                         agent_params,
                         reward_shaping_params)
 
+    def moving_average(mean_rewards):
+        rewards = np.average(mean_rewards, axis = 1)
+        return rewards
+
+    print(agent_config_path)
     if agent_config_path is not None:
         gin.parse_config_file(agent_config_path)
 
@@ -326,6 +347,8 @@ def evaluation_session(input_,
     agent_data = input_dict['agent_data']
     epoch_circle = input_dict['epoch_circle']
     pbt_counter = input_dict['pbt_counter']
+    mean_rewards = moving_average(input_dict['mean_rewards'])
+    db_path = input_dict['db_path']
 
     env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
     if max_life_tokens is not None:
@@ -354,9 +377,9 @@ def evaluation_session(input_,
     discard_perc = population_params.discard_percent
     lifespan = population_params.life_span
     total_reward = parallel_eval_session.run_eval(dest=os.path.join(output_dir, "pbt_{}".format(epoch_circle)))
-    mean_reward = split_evaluation(total_reward, n_parallel, population_size)
+    # mean_reward = split_evaluation(total_reward, n_parallel, population_size)
     agents[0].pbt_counter = pbt_counter
-    agents[0].pbt_eval(mean_reward)
+    agents[0].pbt_eval(mean_rewards, output_dir)
     for i, agent in enumerate(agents[0].agents):
         print('agent_{} is object {}'.format(i, agent))
 
@@ -368,7 +391,7 @@ def training_run(agent_data = [],
                 epoch_circle = None,
                 pbt_counter = []
                 ):
-
+    print('IN TRAINING', args.agent_config_path)
     input_ = Queue()
     output = Queue()
     processes = []
@@ -378,7 +401,7 @@ def training_run(agent_data = [],
                     'pbt_counter' : pbt_counter[i],
                     'gpu' : str(i)}
         input_.put(input_data)
-        output_dir = (args.output_dir + '_{}'.format(i))
+        output_dir = (os.path.join(args.output_dir,'over_agent_{}'.format(i)))
         p = Process(target=session, args=(input_, 
                                         output, 
                                         args.self_play, 
@@ -388,21 +411,24 @@ def training_run(agent_data = [],
         p.start()
     agent_data = []
     pbt_counter_2 = []
+    mean_rewards = []
     for p in processes:
         ret = output.get() # will block
         agent_data.append(ret[0][0])
         pbt_counter_2.append(ret[2])
+        mean_rewards.append(ret[3])
 
     for p in processes:
         p.join()
     pbt_counter_2 = np.concatenate(pbt_counter_2)
-
-    return agent_data, ret[1], pbt_counter_2
+    mean_rewards = np.concatenate(mean_rewards, axis = 0)
+    return agent_data, ret[1], pbt_counter_2, mean_rewards
 
 def evaluation_run(agent_data = [], 
                 epoch_circle = None,
-                pbt_counter = None
-                ):
+                pbt_counter = None,
+                mean_rewards = None,
+                db_path = None):
 
     input_ = Queue()
     output = Queue()
@@ -410,17 +436,16 @@ def evaluation_run(agent_data = [],
 
     input_data = {'agent_data' : agent_data, 
                 'pbt_counter' : pbt_counter,
-                'epoch_circle' : epoch_circle
+                'epoch_circle' : epoch_circle,
+                'mean_rewards' : mean_rewards,
+                'db_path' : db_path
                 }
     input_.put(input_data)
-    output_dir = (args.output_dir + '_{}'.format('pbt'))
-
-
+    output_dir = os.path.join(args.output_dir, 'best_agents')
     #########
-    shutil.rmtree(output_dir)
-    os.mkdir(output_dir)
-
-
+    # shutil.rmtree(output_dir)
+    if not os.path.isdir(output_dir):
+        os.mkdir(output_dir)
 
     p = Process(target=evaluation_session, args=(input_, 
                                     output, 
@@ -442,20 +467,25 @@ def evaluation_run(agent_data = [],
 
 def main(args):
     # load configuration from gin file
+    print(args.agent_config_path)
     if args.agent_config_path is not None:
         gin.parse_config_file(args.agent_config_path)
+        
     
-    pbtparams = PBTParams()
+    db_path = args.db_path
+    with gin.config_scope('agent_0'):
+        pbtparams = PBTParams()
+    print(pbtparams.generations)
     agent_data = [[],[]]
     pbt_counter = np.zeros(pbtparams.population_size)
 
     epoch_circle = 0
     for gens in range(pbtparams.generations):
-        agent_data, epoch_circle, pbt_counter = training_run(agent_data, epoch_circle, np.split(pbt_counter, 2))
+        agent_data, epoch_circle, pbt_counter, mean_rewards = training_run(agent_data, epoch_circle, np.split(pbt_counter, 2))
         print('pbt_counter after training {}'.format(pbt_counter))
         time.sleep(5)
-        agent_data, pbt_counter = evaluation_run(agent_data, epoch_circle, pbt_counter)
-        print('pbt_counter before trianing {}'.format(pbt_counter))
+        agent_data, pbt_counter = evaluation_run(agent_data, epoch_circle, pbt_counter, mean_rewards, db_path)
+        print('pbt_counter before training {}'.format(pbt_counter))
         time.sleep(5)
 
 
@@ -500,6 +530,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir", type=str, default="./output",
         help="Destination for storing weights and statistics")
+    
+    parser.add_argument(
+        "--db_path", type=str, default=None,
+        help="Path to the DB that contains observations for diversity measure"
+    )
 
 
     args = parser.parse_args()
