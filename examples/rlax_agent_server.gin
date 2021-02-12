@@ -1,6 +1,6 @@
 # defining the session
-session.n_parallel                               = 320
-session.n_parallel_eval                          = 1000
+session.n_parallel                               = 384
+session.n_parallel_eval                          = 1200
 session.epochs                                   = 3500
 
 # define schedule for annealing of beta_is
@@ -25,15 +25,15 @@ agent_0/RlaxRainbowParams.atom_vmax              = 15 # for hanabi small
 agent_0/RlaxRainbowParams.priority_w			 = 0.6
 agent_0/RlaxRainbowParams.history_size           = 1
 
-agent_0/PBTParams.population_size                = 20
+agent_0/PBTParams.population_size                = 24
 agent_0/PBTParams.discard_percent                = 0.8
 agent_0/PBTParams.individual_reward_shaping      = False
 agent_0/PBTParams.life_span                      = 99
 agent_0/PBTParams.generations                    = 70
-agent_0/PBTParams.saver_threshold                = 13
-agent_0/PBTParams.pool_path                      = 'pool'
-agent_0/PBTParams.db_path                        = 'mnt/raid/ni/hanabi/obs.db'
-agent_0/PBTParams.w_diversity                    = 5
+agent_0/PBTParams.saver_threshold                = 14
+agent_0/PBTParams.pool_path                      = '/mnt/raid/ni/hanabi/result_pool'
+agent_0/PBTParams.db_path                        = '/mnt/raid/ni/hanabi/obs.db'
+agent_0/PBTParams.w_diversity                    = 12
 agent_0/PBTParams.obs_no                         = 50000
 agent_0/PBTParams.n_mean                         = 5
 
