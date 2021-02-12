@@ -60,6 +60,9 @@ def session(
     epoch_circle = input_dict['epoch_circle']
     pbt_counter = input_dict['pbt_counter']
     agent_data = input_dict['agent_data']
+    restore_weights = input_dict['restore_weights']
+    print(restore_weights)
+
 
     with gin.config_scope('agent_0'):
         population_params = PBTParams()
@@ -81,7 +84,8 @@ def session(
             os.makedirs(os.path.join(output_dir, "weights", "pos_" + str(i)))
             for j in range(population_size):
                 os.makedirs(os.path.join(output_dir, "weights","pos_" + str(i), "agent_" + str(j)))
-        pbt_counter = np.zeros(population_size) + 50
+        
+        pbt_counter = np.zeros(population_size) + 52
 
         #assert n_parallel and n_parallel_eval are multiples of popsize
         assert n_parallel % population_size == 0, 'n_parallel has to be multiple of pop_size'
@@ -163,9 +167,13 @@ def session(
     if self_play:
         with gin.config_scope('agent_0'):
             self_play_agent = load_agent(env)
+            self_play_agent.pbt_counter = pbt_counter
+            if epoch_circle == 0:
+                if restore_weights is not None:
+                    print('here i am')
+                    self_play_agent.restore_weights(restore_weights)
             if epoch_circle > 0:
                 self_play_agent.restore_characteristics(agent_data)
-                self_play_agent.pbt_counter = pbt_counter
             agents = [self_play_agent for _ in range(n_players)]
     # TODO: --later-- non-self-play
     # else:
@@ -389,8 +397,8 @@ def evaluation_session(input_,
 
 def training_run(agent_data = [], 
                 epoch_circle = None,
-                pbt_counter = []
-                ):
+                pbt_counter = [],
+                restore_weights = None):
     print('IN TRAINING', args.agent_config_path)
     input_ = Queue()
     output = Queue()
@@ -399,7 +407,11 @@ def training_run(agent_data = [],
         input_data = {'agent_data' : agent_data[i], 
                     'epoch_circle' : epoch_circle, 
                     'pbt_counter' : pbt_counter[i],
-                    'gpu' : str(i)}
+                    'gpu' : str(i),
+                    'restore_weights' : restore_weights
+                    }
+
+
         input_.put(input_data)
         output_dir = (os.path.join(args.output_dir,'over_agent_{}'.format(i)))
         p = Process(target=session, args=(input_, 
@@ -479,9 +491,10 @@ def main(args):
     agent_data = [[],[]]
     pbt_counter = np.zeros(pbtparams.population_size)
 
+
     epoch_circle = 0
     for gens in range(pbtparams.generations):
-        agent_data, epoch_circle, pbt_counter, mean_rewards = training_run(agent_data, epoch_circle, np.split(pbt_counter, 2))
+        agent_data, epoch_circle, pbt_counter, mean_rewards = training_run(agent_data, epoch_circle, np.split(pbt_counter, 2), args.restore_weights)
         print('pbt_counter after training {}'.format(pbt_counter))
         time.sleep(5)
         agent_data, pbt_counter = evaluation_run(agent_data, epoch_circle, pbt_counter, mean_rewards, db_path)
@@ -534,6 +547,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--db_path", type=str, default=None,
         help="Path to the DB that contains observations for diversity measure"
+    )
+    parser.add_argument(
+        "--restore_weights", type=str, default=None,
+        help="Path pickle file with agent weights"
     )
 
 
