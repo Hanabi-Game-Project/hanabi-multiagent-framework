@@ -207,7 +207,7 @@ if __name__ == "__main__":
         help="Path to gin config file for rlax rainbow agent.")
 
     parser.add_argument(
-        "--output_dir", type=str, default="/output",
+        "--output_dir", type=str, default="./output",
         help="Destination for storing weights and statistics")
 
     parser.add_argument(
