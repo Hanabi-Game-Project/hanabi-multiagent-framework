@@ -6,9 +6,9 @@ RUN mkdir /dm-tools && \
     git clone https://github.com/deepmind/dm-haiku.git --depth 1 /dm-tools/dm-haiku && \
     git clone https://github.com/deepmind/rlax.git --depth 1 /dm-tools/rlax && \
     mkdir /hanabi && \
-    git clone https://github.com/vsois/hanabi-learning-environment.git --recurse-submodules --branch conservative_agent --depth 1 /hanabi/le && \
-    git clone https://github.com/vsois/hanabi-multiagent-framework.git --branch conservative_agent --depth 1 /hanabi/framework && \
-    git clone https://github.com/vsois/hanabi-agents.git --recurse-submodules --branch conservative_agent --depth 1 /hanabi/agents && \
+    git clone https://github.com/Hanabi-Game-Project/hanabi-learning-environment.git --recurse-submodules --branch pybind11 --depth 1 /hanabi/le && \
+    git clone https://github.com/Hanabi-Game-Project/hanabi-multiagent-framework.git --branch conservative_agent --depth 1 /hanabi/framework && \
+    git clone https://github.com/Hanabi-Game-Project/hanabi-agents.git --recurse-submodules --branch conservative_agent --depth 1 /hanabi/agents && \
     wget -O /dm-tools/miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 
 FROM nvidia/cuda:10.1-cudnn7-devel
