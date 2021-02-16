@@ -15,7 +15,6 @@ def load_agent(env):
     reward_shaper = RewardShaper(reward_shaping_params)
     
     agent_params = RlaxRainbowParams()
-    print(agent_params)
     return DQNAgent(env.observation_spec_vec_batch()[0],
                     env.action_spec_vec(),
                     agent_params,
@@ -33,9 +32,12 @@ def session(
             n_train_steps: int = 4,
             n_sim_steps: int = 2,
             epochs: int = 1_000_000,
+            epoch_offset = 0,
             eval_freq: int = 500,
             self_play: bool = True,
             output_dir = "/output",
+            start_with_weights=None,
+            n_backup = 500
     ):
     
     print(epochs, n_parallel, n_parallel_eval)
@@ -76,16 +78,27 @@ def session(
             agents = [agent for _ in range(n_players)]
             logger.info("self play")
             logger.info("Agent Config\n" + str(agent))
+            logger.info("Reward Shaper Config\n" + str(agent.reward_shaper))
     
     else:
         
         agents = []
+        logger.info("multi play")
           
         for i in range(n_players):
             with gin.config_scope('agent_'+str(i)): 
                 
+                logger.info("Agent Config " + i + " \n" + str(agent))
+                logger.info("Reward Shaper Config\n" + str(agent.reward_shaper))
                 agent = load_agent(env)
                 agents.append(agent)
+                
+    # load previous weights            
+    if start_with_weights is not None:
+        print(start_with_weights)
+        for aid, agent in enumerate(agents):
+            if "agent_" + str(aid) in start_with_weights:
+                agent.restore_weights(*(start_with_weights["agent_" + str(aid)]))
     
     # start parallel session for training and evaluation          
     parallel_session = hmf.HanabiParallelSession(env, agents)
@@ -104,7 +117,7 @@ def session(
     start_time = time.time()
     
     # start training
-    for epoch in range(epochs):
+    for epoch in range(epoch_offset, epochs + epoch_offset):
         
         # train
         parallel_session.train(n_iter=eval_freq,
@@ -116,7 +129,10 @@ def session(
         n_warmup = 0
         
         # print number of train steps
-        print("step", (epoch + 1) * eval_freq * n_train_steps)
+        if self_play:
+            print("step", (epoch + 1) * eval_freq * n_train_steps * n_players)
+        else:
+            print("step", (epoch + 1) * eval_freq * n_train_steps)
         
         # evaluate
         mean_reward = parallel_eval_session.run_eval(
@@ -124,7 +140,9 @@ def session(
             ).mean()
 
         # compare to previous iteration and store checkpoints
-        if epoch % 500 == 0:
+        if (epoch + 1) % n_backup == 0:
+            
+            print('save weights', epoch)
             
             if self_play:
                 agents[0].save_weights(
@@ -156,20 +174,33 @@ def session(
         start_time = time.time()
         
         
-def linear_schedule(val_start, val_end, n_epochs):
+def linear_schedule(val_start, val_end, n_steps):
     
     def schedule(step):
-        increase = (val_end - val_start) / n_epochs
+        increase = (val_end - val_start) / n_steps
         return min(val_end, val_start + step * increase)
     
     return schedule
 
 
+def ramp_schedule(val_start, val_end, n_steps):
+    
+    def schedule(step):
+        return val_start if step < n_steps else val_end
+    
+    return schedule
+
+
 @gin.configurable
-def schedule_beta_is(value_start, value_end, epochs):
-    return linear_schedule(value_start, value_end, epochs)
+def schedule_beta_is(value_start, value_end, steps):
+    return linear_schedule(value_start, value_end, steps)
+
+
+@gin.configurable
+def schedule_risk_penalty(value_start, value_end, steps):
+    return ramp_schedule(value_start, value_end, steps)
+     
         
-  
 def main(args):
     
     # load configuration from gin file
@@ -220,6 +251,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir", type=str, default="/output",
         help="Destination for storing weights and statistics")
+    parser.add_argument(
+        "--start_with_weights", type=json.loads, default=None,
+        help="Initialize the agents with the specified weights before training. Syntax: {\"agent_0\" : [\"path/to/weights/1\", ...], ...}")
 
     args = parser.parse_args()
 
