@@ -38,8 +38,8 @@ def session(
             hanabi_game_type="Hanabi-Small",
             n_players: int = 2,
             max_life_tokens: int = None,
-            n_parallel: int = 320,
-            n_parallel_eval:int = 2000,
+            n_parallel: int = 384,
+            n_parallel_eval:int = 1200,
             n_train_steps: int = 1,
             n_sim_steps: int = 2,
             epochs: int = 3500,
@@ -85,7 +85,7 @@ def session(
             for j in range(population_size):
                 os.makedirs(os.path.join(output_dir, "weights","pos_" + str(i), "agent_" + str(j)))
         
-        pbt_counter = np.zeros(population_size) + 52
+        pbt_counter = np.zeros(population_size) + (2*pbt_epochs + 2)
 
         #assert n_parallel and n_parallel_eval are multiples of popsize
         assert n_parallel % population_size == 0, 'n_parallel has to be multiple of pop_size'
@@ -170,7 +170,6 @@ def session(
             self_play_agent.pbt_counter = pbt_counter
             if epoch_circle == 0:
                 if restore_weights is not None:
-                    print('here i am')
                     self_play_agent.restore_weights(restore_weights)
             if epoch_circle > 0:
                 self_play_agent.restore_characteristics(agent_data)
@@ -267,8 +266,8 @@ def evaluation_session(input_,
             hanabi_game_type="Hanabi-Small",
             n_players: int = 2,
             max_life_tokens: int = None,
-            n_parallel: int = 320,
-            n_parallel_eval:int = 10000,
+            n_parallel: int = 384,
+            n_parallel_eval:int = 12000,
             n_train_steps: int = 1,
             n_sim_steps: int = 2,
             epochs: int = 1,
@@ -379,8 +378,8 @@ def evaluation_session(input_,
 
     parallel_eval_session = hmf.HanabiParallelSession(eval_env, agents)
 
-
-    population_params = PBTParams()
+    with gin.config_scope('agent_0'):
+        population_params = PBTParams()
     population_size = population_params.population_size
     discard_perc = population_params.discard_percent
     lifespan = population_params.life_span
