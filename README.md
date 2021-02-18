@@ -35,7 +35,7 @@ The following packages need to be installed:
 * gin-config
 * chex==0.0.2
 * dm-env==1.3
-* dm-haiku==0.0.2
+* dm-haiku==0.0.3
 * dm-tree==0.1.5
 * jax==0.2.5
 * jaxlib for GPU (```https://storage.googleapis.com/jax-releases/cuda100/jaxlib-0.1.55-cp36-none-manylinux2010_x86_64.whl```)
