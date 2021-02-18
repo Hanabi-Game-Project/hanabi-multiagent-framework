@@ -73,7 +73,7 @@ $ python reward_shaping_session.py --self_play
 
 Pretrained weights of training and target network, the optimizer state and the experience buffer can be loaded for each agent. The information must be given in json-format, for example:
 ```
-$ python /hanabi-examples/reward_shaping_session.py --self_play --agent_config_path=/hanabi-examples/rlax_agent.gin --start_with_weights="{\"agent_0\" : [\"/hanabi-examples/weights/agent_0/rlax_rainbow_best_online.pkl\",\"/hanabi-examples/weights/agent_0/rlax_rainbow_best_target.pkl\"]}"
+$ python /hanabi-examples/reward_shaping_session.py --self_play --agent_config_path=/hanabi-examples/rlax_agent.gin --start_with_weights="{\"agent_0\" : [\"/hanabi-examples/weights/hyper_opt/rlax_rainbow_best_online.pkl\",\"/hanabi-examples/weights/hyper_opt/rlax_rainbow_best_target.pkl\"]}"
 ```
 If using pretrained weights, the network structure must remain unchanged. Loading the experience buffer from a file overwrites buffer parameters set in the gin file. To continue a training session without information loss, the files containing network parameters, optimizer state and experience buffer must be loaded into the session. Adjust the ```epoch_offset``` in the gin file to reflect the number of epochs trained previously.
 
