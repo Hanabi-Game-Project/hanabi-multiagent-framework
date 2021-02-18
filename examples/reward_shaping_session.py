@@ -90,7 +90,6 @@ def session(
                 agent = load_agent(env)
                 logger.info("Agent Config " + i + " \n" + str(agent))
                 logger.info("Reward Shaper Config\n" + str(agent.reward_shaper))
-                agent = load_agent(env)
                 agents.append(agent)
                 
     # load previous weights            
