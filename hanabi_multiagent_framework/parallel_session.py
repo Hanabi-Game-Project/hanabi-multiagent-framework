@@ -144,7 +144,7 @@ class HanabiParallelSession:
                 counter += 1
                 
             # reveal options
-            reveal_options = [1 for o in self._cur_obs if o.information_tokens>0]
+            reveal_options = [1 if o.information_tokens>0 else 0 for o in self._cur_obs]
 
             # moves
             for idx, a in enumerate(actions):
