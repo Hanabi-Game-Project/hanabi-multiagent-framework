@@ -142,6 +142,9 @@ class HanabiParallelSession:
                     except IndexError:
                         pass
                 counter += 1
+                
+            # reveal options
+            reveal_options = [1 for o in self._cur_obs if o.information_tokens>0]
 
             # moves
             for idx, a in enumerate(actions):
@@ -179,6 +182,7 @@ class HanabiParallelSession:
                     "bad_discards":  np.sum(bad_discards[valid_states]),
                     "discard": np.sum(np.array(discard_moves)[valid_states]), 
                     "reveal": np.sum(np.array(reveal_moves)[valid_states]),
+                    "reveal_options": np.sum(np.array(reveal_options)[valid_states]),
                     "rewards" : reward[valid_states],
                     "playability": step_playability,
                     "agent_id": agent_id})
