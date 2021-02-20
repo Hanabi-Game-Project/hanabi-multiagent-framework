@@ -35,7 +35,7 @@ The following packages need to be installed:
 * gin-config
 * chex==0.0.2
 * dm-env==1.3
-* dm-haiku==0.0.2
+* dm-haiku==0.0.3
 * dm-tree==0.1.5
 * jax==0.2.5
 * jaxlib for GPU (```https://storage.googleapis.com/jax-releases/cuda100/jaxlib-0.1.55-cp36-none-manylinux2010_x86_64.whl```)
@@ -64,16 +64,16 @@ In the `examples` folder a python script `reward_shaping_session.py` and a confi
 
 Run the following command (in the docker container). The weights and statistics generated during training are stored in the folder `/output_example`.
 ```
-$ python /hanabi-examples/reward_shaping_session.py --agent_config_path=/hanabi-examples/rlax_agent.gin --output_dir=/output_example
+$ python /examples/reward_shaping_session.py --agent_config_path=/examples/rlax_agent.gin --output_dir=/output_example
 ```
 To train an agent in self-play mode, run the script with the `self_play` argument:
 ```
-$ python reward_shaping_session.py --self_play
+$ python /examples/reward_shaping_session.py --self_play
 ```
 
 Pretrained weights of training and target network, the optimizer state and the experience buffer can be loaded for each agent. The information must be given in json-format, for example:
 ```
-$ python /hanabi-examples/reward_shaping_session.py --self_play --agent_config_path=/hanabi-examples/rlax_agent.gin --start_with_weights="{\"agent_0\" : [\"/hanabi-examples/weights/hyper_opt/rlax_rainbow_best_online.pkl\",\"/hanabi-examples/weights/hyper_opt/rlax_rainbow_best_target.pkl\"]}"
+$ python /examples/reward_shaping_session.py --self_play --agent_config_path=/examples/rlax_agent.gin --start_with_weights="{\"agent_0\" : [\"/examples/weights/conservative/rlax_rainbow_best_online.pkl\",\"/examples/weights/conservative/rlax_rainbow_best_target.pkl\"]}"
 ```
 If using pretrained weights, the network structure must remain unchanged. Loading the experience buffer from a file overwrites buffer parameters set in the gin file. To continue a training session without information loss, the files containing network parameters, optimizer state and experience buffer must be loaded into the session. Adjust the ```epoch_offset``` in the gin file to reflect the number of epochs trained previously.
 
