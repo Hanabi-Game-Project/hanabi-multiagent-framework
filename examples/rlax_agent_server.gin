@@ -32,6 +32,7 @@ agent_0/PBTParams.life_span                      = 99
 agent_0/PBTParams.generations                    = 70
 agent_0/PBTParams.saver_threshold                = 14
 agent_0/PBTParams.pool_path                      = '/mnt/raid/ni/hanabi/result_pool'
+agent_0/PBTParams.use_db                         = False
 agent_0/PBTParams.db_path                        = '/mnt/raid/ni/hanabi/obs.db'
 agent_0/PBTParams.w_diversity                    = 12
 agent_0/PBTParams.obs_no                         = 50000

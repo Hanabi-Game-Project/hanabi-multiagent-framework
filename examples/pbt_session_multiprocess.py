@@ -19,10 +19,10 @@ import multiprocessing
 
 
 # for use on local machine to not overload GPU-memory given jax default setting to occupy 90% of total GPU-Memory
-# os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.2"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.2"
 
 # setting only necessary for NI server where cuda is installed via conda-env
-os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir=/mnt/antares_raid/home/maltes/miniconda/envs/RL"
+# os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir=/mnt/antares_raid/home/maltes/miniconda/envs/RL"
 
 
 """
@@ -99,7 +99,8 @@ def session(
                         env.action_spec_vec(),
                         population_params,
                         agent_params,
-                        reward_shaping_params)
+                        reward_shaping_params,
+                        eval_run = False)
 
     def create_exp_decay_scheduler(val_start, val_min, inflection1, inflection2):
         def scheduler(step):
@@ -228,7 +229,9 @@ def session(
 
     epoch_circle += 1
     mean_reward_prev = add_reward(mean_reward_prev, mean_reward)
-    q.put([[agents[0].save_characteristics()], epoch_circle, agents[0].pbt_counter, mean_reward_prev])
+    q.put([[agents[0].save_characteristics()], 
+            epoch_circle, agents[0].pbt_counter, 
+            mean_reward_prev])
 
 
 @gin.configurable(blacklist=['self_play'])
@@ -314,7 +317,8 @@ def evaluation_session(input_,
                         env.action_spec_vec(),
                         population_params,
                         agent_params,
-                        reward_shaping_params)
+                        reward_shaping_params,
+                        eval_run = True)
 
     def moving_average(mean_rewards):
         '''Averages over the 2D Matrix of Means of the past runs'''
@@ -332,6 +336,8 @@ def evaluation_session(input_,
     pbt_counter = input_dict['pbt_counter']
     mean_rewards = moving_average(input_dict['mean_rewards'])
     db_path = input_dict['db_path']
+    pbt_history = input_dict['pbt_history']
+    pbt_history_params = input_dict['pbt_history_params']
 
     #environment configurations & initialization
     env_conf = make_hanabi_env_config(hanabi_game_type, n_players)
@@ -364,14 +370,23 @@ def evaluation_session(input_,
 
     #start PBT-logic
     agents[0].pbt_counter = pbt_counter
+    agents[0].pbt_history = pbt_history
+    agents[0].pbt_history_params = pbt_history_params
+
+
     agents[0].pbt_eval(mean_rewards, output_dir)
+    agents[0].save_pbt_log(output_dir, epoch_circle)
+    
     for i, agent in enumerate(agents[0].agents):
         print('agent_{} is object {}'.format(i, agent))
 
     #return data to continue training in divided sub-processes
     return_data = separate_agent(agents[0])
     pbt_counter = agents[0].pbt_counter
-    output_.put((return_data, pbt_counter))
+    output_.put((return_data, 
+                pbt_counter,
+                agents[0].pbt_history, 
+                agents[0].pbt_history_params))
 
 
 def training_run(agent_data = [], 
@@ -424,7 +439,9 @@ def evaluation_run(agent_data = [],
                 epoch_circle = None,
                 pbt_counter = None,
                 mean_rewards = None,
-                db_path = None):
+                db_path = None,
+                pbt_history = [],
+                pbt_history_params = []):
     '''Function that administers the use of Multiprocessing-Process for evaluation (Subprocess because of CUDA init issues otherwise)'''
     input_ = Queue()
     output = Queue()
@@ -435,10 +452,13 @@ def evaluation_run(agent_data = [],
                 'pbt_counter' : pbt_counter,
                 'epoch_circle' : epoch_circle,
                 'mean_rewards' : mean_rewards,
-                'db_path' : db_path
+                'db_path' : db_path,
+                'pbt_history' : pbt_history,
+                'pbt_history_params' : pbt_history_params
                 }
     input_.put(input_data)
-    output_dir = os.path.join(args.output_dir, 'best_agents')
+    # output_dir = os.path.join(args.output_dir, 'best_agents')
+    output_dir = args.output_dir
 
     #make directory for all processes to use
     if not os.path.isdir(output_dir):
@@ -456,8 +476,12 @@ def evaluation_run(agent_data = [],
     eval_data = output.get() # will block
     agent_data = eval_data[0]
     pbt_counter = eval_data[1]
+    pbt_history = eval_data[2]
+    pbt_history_params = eval_data[3]
     p.join()
-    return agent_data, pbt_counter
+
+
+    return agent_data, pbt_counter, pbt_history, pbt_history_params
 
 
 
@@ -471,14 +495,21 @@ def main(args):
         pbtparams = PBTParams()
     agent_data = [[],[]]
     pbt_counter = np.zeros(pbtparams.population_size)
-
+    pbt_history = []
+    pbt_history_params = []
     # run PBT-algorithm in generations
     epoch_circle = 0
     for gens in range(pbtparams.generations):
         agent_data, epoch_circle, pbt_counter, mean_rewards = training_run(agent_data, epoch_circle, np.split(pbt_counter, 2), args.restore_weights)
         print('pbt_counter after training {}'.format(pbt_counter))
         time.sleep(5)
-        agent_data, pbt_counter = evaluation_run(agent_data, epoch_circle, pbt_counter, mean_rewards, db_path)
+        agent_data, pbt_counter, pbt_history, pbt_history_params = evaluation_run(agent_data, 
+                                                                                    epoch_circle, 
+                                                                                    pbt_counter, 
+                                                                                    mean_rewards, 
+                                                                                    db_path, 
+                                                                                    pbt_history, 
+                                                                                    pbt_history_params)
         print('pbt_counter before training {}'.format(pbt_counter))
         time.sleep(5)
 
