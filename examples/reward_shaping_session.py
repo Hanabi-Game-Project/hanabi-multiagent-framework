@@ -3,22 +3,36 @@ import numpy as np
 import gin
 import hanabi_multiagent_framework as hmf
 from hanabi_multiagent_framework.utils import make_hanabi_env_config
-from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams
+from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams, AgentType
 from hanabi_agents.rlax_dqn import RewardShapingParams, RewardShaper
+from hanabi_agents.rule_based import RulebasedParams, RulebasedAgent
+from hanabi_agents.rule_based.predefined_rules import piers_rules, piers_rules_adjusted
 import logging
 import time
 
 
 def load_agent(env):
     
+    # load reward shaping infos
     reward_shaping_params = RewardShapingParams()
-    reward_shaper = RewardShaper(reward_shaping_params)
+    if reward_shaping_params.shaper:
+        reward_shaper = RewardShaper(reward_shaping_params)
+    else:
+        reward_shaper = None
     
-    agent_params = RlaxRainbowParams()
-    return DQNAgent(env.observation_spec_vec_batch()[0],
-                    env.action_spec_vec(),
-                    agent_params,
-                    reward_shaper)
+    # load agent based on type
+    agent_type = AgentType()
+    
+    if agent_type.type == 'rainbow':
+        agent_params = RlaxRainbowParams()
+        return DQNAgent(env.observation_spec_vec_batch()[0],
+                        env.action_spec_vec(),
+                        agent_params,
+                        reward_shaper)
+        
+    elif agent_type.type == 'rulebased':        
+        agent_params = RulebasedParams()
+        return RulebasedAgent(agent_params.ruleset)
 
 
 @gin.configurable(blacklist=['output_dir', 'self_play'])
@@ -135,7 +149,8 @@ def session(
         
         # evaluate
         mean_reward = parallel_eval_session.run_eval(
-            dest=os.path.join(output_dir, "stats", str(epoch))
+            dest=os.path.join(output_dir, "stats", str(epoch)),
+            store_moves=False
             ).mean()
 
         # compare to previous iteration and store checkpoints

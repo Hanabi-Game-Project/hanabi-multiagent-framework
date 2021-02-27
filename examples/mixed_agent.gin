@@ -1,16 +1,16 @@
 # defining the session
 session.n_parallel = 1
 session.n_parallel_eval = 1000
-session.epochs = 3500
+session.n_train_steps=1
+session.epochs = 7000
 
 # define schedule for annealing of beta_is
 schedule_beta_is.value_start = 0.4
 schedule_beta_is.value_end = 1
-schedule_beta_is.epochs = 3500
+schedule_beta_is.steps = 3500
 
 #define the agent type
 agent_0/AgentType.type                           = 'rainbow'
-
 # define the agent parameters
 agent_0/RlaxRainbowParams.train_batch_size       = 32
 agent_0/RlaxRainbowParams.target_update_period   = 500
@@ -28,19 +28,15 @@ agent_0/RlaxRainbowParams.beta_is                = @schedule_beta_is()
 agent_0/RlaxRainbowParams.priority_w			 = 0.6
 agent_0/RlaxRainbowParams.history_size           = 1
 
-agent_0/RewardShapingParams.shaper               = True
-agent_0/RewardShapingParams.min_play_probability = 0
-agent_0/RewardShapingParams.w_play_probability	 = 0
-agent_0/RewardShapingParams.penalty_last_of_kind = 0.5
-
+agent_0/RewardShapingParams.shaper               = False
+agent_0/RewardShapingParams.min_play_probability = 0.8
+agent_0/RewardShapingParams.w_play_penalty	 	 = 0
+agent_0/RewardShapingParams.m_play_penalty		 = 0
+agent_0/RewardShapingParams.w_play_reward	 	 = 0
+agent_0/RewardShapingParams.m_play_reward		 = 0
+agent_0/RewardShapingParams.penalty_last_of_kind = 0
 
 #define the agent type
 agent_1/AgentType.type                           = 'rulebased'
-
 # define the agent parameters
-#agent_1/RulebasedParams.ruleset                  = piers_rules
-
-agent_1/RewardShapingParams.shaper               = False
-agent_1/RewardShapingParams.min_play_probability = 0
-agent_1/RewardShapingParams.w_play_probability	 = 0
-agent_1/RewardShapingParams.penalty_last_of_kind = 0
+#agent_1/RulebasedParams.ruleset                  = piers_rules_adjusted
