@@ -51,7 +51,8 @@ def session(
             self_play: bool = True,
             output_dir = "/output",
             start_with_weights=None,
-            n_backup = 500
+            n_backup = 500, 
+            restore_weights = None
     ):
     
     print(epochs, n_parallel, n_parallel_eval)
@@ -89,6 +90,8 @@ def session(
         with gin.config_scope('agent_0'):
             
             agent = load_agent(env)
+            if restore_weights is not None:
+                agent.restore_weights(restore_weights, restore_weights)
             agents = [agent for _ in range(n_players)]
             logger.info("self play")
             logger.info("Agent Config\n" + str(agent))
@@ -255,9 +258,9 @@ if __name__ == "__main__":
 # #     parser.add_argument(
 # #         "--eval_n_parallel", type=int, default=1_000,
 # #         help="Number of parallel games to use for evaluation.")
-#     parser.add_argument(
-#         "--eval_freq", type=int, default=500,
-#         help="Number of iterations to perform between evaluations.")
+    parser.add_argument(
+        "--restore_weights", type=str, default=None,
+        help="Path to weights of pretrained agent.")
     parser.add_argument(
         "--agent_config_path", type=str, default=None,
         help="Path to gin config file for rlax rainbow agent.")
