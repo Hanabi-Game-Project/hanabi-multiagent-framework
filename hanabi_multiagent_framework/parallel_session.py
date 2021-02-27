@@ -15,6 +15,7 @@ from hanabi_agents.rlax_dqn import RewardShaper, ShapingType
 from _cffi_backend import typeof
 import timeit
 from hanabi_learning_environment import pyhanabi_pybind as pyhanabi
+import time
 
 class HanabiParallelSession:
     """
@@ -84,41 +85,63 @@ class HanabiParallelSession:
             if stack is not None:
                 stack.reset()
 
-    def run_eval(self, dest: str = None, print_intermediate: bool = True) -> np.ndarray:
+    def run_eval(self, 
+                 dest: str = None, 
+                 print_intermediate: bool = True,
+                 store_steps: bool = True,
+                 store_moves: bool = True,
+                 n_chunk: int = 1) -> np.ndarray:
         """Run each state until the end and return the final scores.
         Args:
             print_intermediate -- Flag indicating whether each step of evaluation should be printed.
         """
         self.reset()
         print("Agents", self.agents.agents)
-        #  print("Running evaluation")
+        
+        # values that are calculated each function call
         total_reward = np.zeros((self.n_states,))
         total_shaped_reward = np.zeros((self.n_states,))
-        total_play_moves = np.zeros((self.n_states,))
-        total_discard_moves = np.zeros((self.n_states,))
-        total_reveal_moves = np.zeros((self.n_states,))
-        total_risky_moves = np.zeros((self.n_states,))
-        total_bad_discards = np.zeros((self.n_states))
         step_rewards = []
         playability = [[] for i in range(self.n_states)]
-        move_eval = [[] for i in range(self.n_states)]
+        
+        # values that are calculated if move_eval is requested
+        if store_moves:
+            total_play_moves = np.zeros((self.n_states,))
+            total_discard_moves = np.zeros((self.n_states,))
+            total_reveal_moves = np.zeros((self.n_states,))
+            total_reveal_options = np.zeros((self.n_states,))
+            total_risky_moves = np.zeros((self.n_states,))
+            total_bad_discards = np.zeros((self.n_states))
+            move_eval = [[] for i in range(self.n_states)]
+
+        # init values
         step_types = self.parallel_env.step_types
-
-
         step = 0
         done = np.full((self.n_states, ), False)
+        
         # run until all states terminate
         while not np.all(done):
             
+            # get all games that are still running
             valid_states = np.logical_not(done)
+            
+            # get the next player
             agent_id, agent = self.agents.next()
+            
+            # reset all finished games, returns objects from pov current player
             self._cur_obs, step_types = \
                 self.parallel_env.reset_states(
                     np.nonzero(step_types == StepType.LAST)[0], agent_id)
 
+            # preprocessing for rainbow: 
+            # get vectorized form of object and add to stacker
             obs = self.preprocess_obs_for_agent(self._cur_obs, agent, self.stacker_eval[agent_id])
+            
+            # agent selects action
             actions = agent.exploit(obs)
 
+            # rule based agent returns move object
+            # rainbow agent returns move id, that can be converted to move object
             if agent.requires_vectorized_observation():
                 moves = self.parallel_env.get_moves(actions)
             else:
@@ -126,11 +149,11 @@ class HanabiParallelSession:
                 
             # get shaped rewards
             reward_shaping, shape_type = agent.shape_rewards(obs, moves)
-            
             risky_moves = shape_type == ShapingType.RISKY
             bad_discards = shape_type == ShapingType.DISCARD_LAST_OF_KIND
 
-            # playability
+            # determine metrics of observation before applying the moves
+            # determine playability, per game and per step
             counter = 0
             step_playability = []
             for o, m in zip(self._cur_obs, moves):
@@ -141,23 +164,19 @@ class HanabiParallelSession:
                         step_playability.append(prob)
                     except IndexError:
                         pass
-                counter += 1
-                
+                counter += 1  
             # reveal options
             reveal_options = [1 if o.information_tokens>0 else 0 for o in self._cur_obs]
-
-            # moves
-            for idx, a in enumerate(actions):
-                if valid_states[idx]:
-                    move_eval[idx].append(a)
             
-            # get new observation based on action
+            # apply moves, get new observation based on action
             self._cur_obs, reward, step_types = \
                     self.parallel_env.step(actions, agent_id)
-                    
+            
+            # add shaped reward to observed reward       
             shaped_reward = reward + reward_shaping
 
-            # convert moves
+            # evaluate moves
+            # sort moves by type
             play_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kPlay else 0
                           for m in moves]
             discard_moves = [1 if m.move_type == pyhanabi.HanabiMove.Type.kDiscard else 0
@@ -166,43 +185,62 @@ class HanabiParallelSession:
                             m.move_type == pyhanabi.HanabiMove.Type.kRevealRank else 0
                             for m in moves]
 
+            # store rewards
             total_reward[valid_states] += reward[valid_states]
             total_shaped_reward[valid_states] += shaped_reward[valid_states]
-            total_play_moves[valid_states] += np.array(play_moves)[valid_states]
-            total_discard_moves[valid_states] += np.array(discard_moves)[valid_states]
-            total_reveal_moves[valid_states] += np.array(reveal_moves)[valid_states]
-            total_risky_moves[valid_states] += risky_moves[valid_states]
-            total_bad_discards[valid_states] += bad_discards[valid_states]
+            
+            # move_eval, count move types and store all moves
+            if store_moves:
+                total_play_moves[valid_states] += np.array(play_moves)[valid_states]
+                total_discard_moves[valid_states] += np.array(discard_moves)[valid_states]
+                total_reveal_moves[valid_states] += np.array(reveal_moves)[valid_states]
+                total_risky_moves[valid_states] += risky_moves[valid_states]
+                total_bad_discards[valid_states] += bad_discards[valid_states]
+                total_reveal_options[valid_states] += np.array(reveal_options)[valid_states]
+                
+                for idx, a in enumerate(actions):
+                    if valid_states[idx]:
+                        move_eval[idx].append(a)
 
+            # determine finished games
             done = np.logical_or(done, step_types == StepType.LAST)
-            if print_intermediate:
-                step_rewards.append({"terminated": np.sum(done),
-                    "risky": np.sum(risky_moves[valid_states]),
-                    "play": np.sum(np.array(play_moves)[valid_states]),
-                    "bad_discards":  np.sum(bad_discards[valid_states]),
-                    "discard": np.sum(np.array(discard_moves)[valid_states]), 
-                    "reveal": np.sum(np.array(reveal_moves)[valid_states]),
-                    "reveal_options": np.sum(np.array(reveal_options)[valid_states]),
-                    "rewards" : reward[valid_states],
-                    "playability": step_playability,
-                    "agent_id": agent_id})
+            
+            if print_intermediate or store_steps:
+                step_rewards.append(
+                    {"terminated": np.sum(done),
+                     "rewards" : reward[valid_states],
+                     "play": np.sum(np.array(play_moves)[valid_states]),
+                     "risky": np.sum(risky_moves[valid_states]),
+                     "discard": np.sum(np.array(discard_moves)[valid_states]), 
+                     "bad_discards":  np.sum(bad_discards[valid_states]),
+                     "reveal_options": np.sum(np.array(reveal_options)[valid_states]),
+                     "reveal": np.sum(np.array(reveal_moves)[valid_states]),
+                     "playability": step_playability,
+                     "agent_id": agent_id})
 
             step += 1
 
         if print_intermediate:
             eval_pretty_print(step_rewards, total_reward)
-            print(playability[:2])
+            
+        # store statistics in files
         if dest is not None:
-            np.save(dest + "_step_rewards.npy", step_rewards)
             np.save(dest + "_total_rewards.npy", total_reward)
             np.save(dest + "_total_shaped_rewards.npy", total_shaped_reward)
-            np.save(dest + "_move_eval.npy", {"play": total_play_moves,
-                "risky": total_risky_moves,
-                "bad_discard": total_bad_discards,
-                "discard": total_discard_moves,
-                "reveal": total_reveal_moves,
-                "playability": playability,
-                "moves": move_eval})
+            
+            if store_steps:
+                np.save(dest + "_step_rewards.npy", step_rewards)
+            if store_moves:
+                np.save(
+                    dest + "_move_eval.npy", 
+                    {"play": total_play_moves,
+                     "risky": total_risky_moves,
+                     "discard": total_discard_moves,
+                     "bad_discard": total_bad_discards,
+                     "reveal": total_reveal_moves,
+                     "playability": playability,
+                     "moves": move_eval}
+                )
         
         # store the average reward as performance parameter in reward shaping
         for agent in self.agents.agents:
@@ -314,11 +352,13 @@ class HanabiParallelSession:
                         (e.g. to fill the experience buffer)
         """
         self.run(n_warmup)
+        
+        # number of iterations per epoch is given
         for _ in range(n_iter):
             self.run(n_sim_steps)
             for _ in range(n_train_steps):
                 for agent in self.agents.agents:
-                    agent.update()
+                    agent.update()         
                     
     def preprocess_obs_for_agent(self, obs, agent, stack):
         
