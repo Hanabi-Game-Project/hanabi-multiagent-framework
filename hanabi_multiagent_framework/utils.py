@@ -135,6 +135,26 @@ def make_hanabi_env_config(
             "observation_type":
                 pyhanabi.AgentObservationType.SEER.value
         }
+        
+    elif environment_name == "Hanabi-Medium":
+        config = {
+            "colors":
+                4,
+            "ranks":
+                5,
+            "players":
+                num_players,
+            "hand_size":
+                4,
+            "max_information_tokens":
+                7,
+            "max_life_tokens":
+                3,
+            "observation_type":
+                pyhanabi.AgentObservationType.CARD_KNOWLEDGE.value
+        } 
+    
+    
     else:
         raise ValueError("Unknown environment {}".format(environment_name))
     #  env = rl_env.HanabiEnv(config=config)
