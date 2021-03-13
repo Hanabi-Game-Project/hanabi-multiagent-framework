@@ -124,7 +124,7 @@ def session(
     print("Game config", parallel_session.parallel_env.game_config)
     
     # evaluate the performance before training
-    mean_reward_prev = parallel_eval_session.run_eval().mean()
+    mean_reward_prev = 0#parallel_eval_session.run_eval().mean()
     
     # calculate warmup period
     n_warmup = int(350 * n_players / n_parallel)
@@ -151,10 +151,26 @@ def session(
             print("step", (epoch + 1) * eval_freq * n_train_steps)
         
         # evaluate
+        output_path = os.path.join(output_dir, "stats", str(epoch))
         mean_reward = parallel_eval_session.run_eval(
-            dest=os.path.join(output_dir, "stats", str(epoch)),
+            dest=output_path,
+            store_steps=False,
             store_moves=False
             ).mean()
+            
+        stochasticity = agents[0].get_stochasticity()
+        np.save(output_path + "_stochasticity.npy", stochasticity)
+        
+        if (epoch +1) % 50 == 0:
+            buffer_td = agents[0].get_buffer_tds()
+            np.save(output_path + "_buffer_tds.npy", buffer_td)
+        
+        if (epoch+1) < 50:
+            drawn_td = agents[0].get_drawn_tds(deactivate=False)
+            np.save(output_path + "_drawn_tds.npy", drawn_td)
+        elif (epoch+1) == 50:
+            drawn_td = agents[0].get_drawn_tds(deactivate=True)
+            np.save(output_path + "_drawn_tds.npy", drawn_td)
 
         # compare to previous iteration and store checkpoints
         if (epoch + 1) % n_backup == 0:
@@ -195,7 +211,10 @@ def linear_schedule(val_start, val_end, n_steps):
     
     def schedule(step):
         increase = (val_end - val_start) / n_steps
-        return min(val_end, val_start + step * increase)
+        if val_end > val_start:
+            return min(val_end, val_start + step * increase)
+        else:
+            return max(val_end, val_start + step * increase)
     
     return schedule
 
@@ -212,11 +231,6 @@ def ramp_schedule(val_start, val_end, n_steps):
 def schedule_beta_is(value_start, value_end, steps):
     return linear_schedule(value_start, value_end, steps)
 
-
-@gin.configurable
-def schedule_risk_penalty(value_start, value_end, steps):
-    return ramp_schedule(value_start, value_end, steps)
-     
         
 def main(args):
     
@@ -233,31 +247,9 @@ if __name__ == "__main__":
     import json
     parser = argparse.ArgumentParser(description="Train a dm-rlax based rainbow agent.")
 
-#     parser.add_argument(
-#         "--hanabi_game_type", type=str, default="Hanabi-Small-Oracle",
-#         help='Can be "Hanabi-{VerySmall,Small,Full}-{Oracle,CardKnowledge}"')
-#     parser.add_argument("--n_players", type=int, default=2, help="Number of players.")
-#     parser.add_argument(
-#         "--max_life_tokens", type=int, default=None,
-#         help="Set a different number of life tokens.")
-# #     parser.add_argument(
-# #         "--n_parallel", type=int, default=32,
-# #         help="Number of games run in parallel during training.")
     parser.add_argument(
         "--self_play", default=False, action='store_true',
         help="Whether the agent should play with itself, or an independent agent instance should be created for each player.")
-#     parser.add_argument(
-#         "--n_train_steps", type=int, default=4,
-#         help="Number of training steps made in each iteration. One iteration consists of n_sim_steps followed by n_train_steps.")
-#     parser.add_argument(
-#         "--n_sim_steps", type=int, default=2,
-#         help="Number of environment steps made in each iteration.")
-#     parser.add_argument(
-#         "--epochs", type=int, default=1_000_000,
-#         help="Total number of rotations = epochs * eval_freq.")
-# #     parser.add_argument(
-# #         "--eval_n_parallel", type=int, default=1_000,
-# #         help="Number of parallel games to use for evaluation.")
     parser.add_argument(
         "--restore_weights", type=str, default=None,
         help="Path to weights of pretrained agent.")
@@ -275,6 +267,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     #main(**vars(args))  
-    main(args)         
-            
+    main(args) 
             

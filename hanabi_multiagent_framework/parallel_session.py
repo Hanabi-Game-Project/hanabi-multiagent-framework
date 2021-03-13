@@ -100,6 +100,8 @@ class HanabiParallelSession:
         
         # values that are calculated each function call
         total_reward = np.zeros((self.n_states,))
+        expected_reward = np.zeros((2, self.n_states))
+        number_of_steps = np.zeros((self.n_states,))
         total_shaped_reward = np.zeros((self.n_states,))
         step_rewards = []
         playability = [[] for i in range(self.n_states)]
@@ -124,6 +126,8 @@ class HanabiParallelSession:
             
             # get all games that are still running
             valid_states = np.logical_not(done)
+            # count number of steps taken
+            number_of_steps[valid_states] += 1
             
             # get the next player
             agent_id, agent = self.agents.next()
@@ -138,8 +142,12 @@ class HanabiParallelSession:
             obs = self.preprocess_obs_for_agent(self._cur_obs, agent, self.stacker_eval[agent_id])
             
             # agent selects action
-            actions = agent.exploit(obs)
-
+            actions, q_values = agent.exploit(obs)
+            
+            # expected total reward
+            if step == 0:
+                expected_reward[0, :] = q_values
+            
             # rule based agent returns move object
             # rainbow agent returns move id, that can be converted to move object
             if agent.requires_vectorized_observation():
@@ -219,7 +227,10 @@ class HanabiParallelSession:
                      "agent_id": agent_id})
 
             step += 1
-
+            
+        # store number of steps
+        expected_reward[1, :] = number_of_steps
+        
         if print_intermediate:
             eval_pretty_print(step_rewards, total_reward)
             
@@ -227,6 +238,7 @@ class HanabiParallelSession:
         if dest is not None:
             np.save(dest + "_total_rewards.npy", total_reward)
             np.save(dest + "_total_shaped_rewards.npy", total_shaped_reward)
+            np.save(dest + "_expected_reward.npy", expected_reward)
             
             if store_steps:
                 np.save(dest + "_step_rewards.npy", step_rewards)
@@ -375,6 +387,4 @@ class HanabiParallelSession:
         
         if agent.requires_vectorized_observation() and stack is not None:
             return (obs[0], (stack.get_current_obs(), obs[1][1]))
-        return obs
-    
-    
+        return obs 
