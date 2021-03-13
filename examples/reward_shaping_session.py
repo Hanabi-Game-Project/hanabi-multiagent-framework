@@ -124,10 +124,10 @@ def session(
     print("Game config", parallel_session.parallel_env.game_config)
     
     # evaluate the performance before training
-    mean_reward_prev = 0#parallel_eval_session.run_eval().mean()
+    mean_reward_prev = parallel_eval_session.run_eval().mean()
     
     # calculate warmup period
-    n_warmup = int(350 * n_players / n_parallel)
+    n_warmup = int(350 * n_players / n_parallel) + n_players
 
     # start time
     start_time = time.time()
