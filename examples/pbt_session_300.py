@@ -124,7 +124,7 @@ def session(
     #     assert n_parallel % population_size == 0, 'n_parallel has to be multiple of pop_size'
     #     assert n_parallel_eval % population_size == 0, 'n_parallel_eval has to be multiple of pop_size'
 
-    output_dir = os.path.join(output_dir, ('generation_' + str(epoch_circle)))
+    output_dir = os.path.join(output_dir, ('generation_' + str((num_gpus*1000 + epoch_circle)))
     os.makedirs(output_dir)
 
     #environment configurations & initialization
