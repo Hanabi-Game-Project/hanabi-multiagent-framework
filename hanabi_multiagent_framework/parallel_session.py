@@ -16,6 +16,8 @@ from _cffi_backend import typeof
 import timeit
 from hanabi_learning_environment import pyhanabi_pybind as pyhanabi
 
+import time
+
 class HanabiParallelSession:
     """
     A class for running parallel game sessions
@@ -73,6 +75,8 @@ class HanabiParallelSession:
         self.last_observations = [None for i in  range(self.agents.__len__())]
         
         self.reset()
+        
+        self.prio_time = 0
 
     def reset(self):
         """Reset the session, i.e. reset the all states and start from agent 0."""
@@ -269,7 +273,8 @@ class HanabiParallelSession:
               n_iter: int,
               n_sim_steps: int,
               n_train_steps: int,
-              n_warmup: int):
+              n_warmup: int,
+              optimize_for_parallel: bool = False):
         """Train agents.
 
         Args:
@@ -280,12 +285,22 @@ class HanabiParallelSession:
                         (e.g. to fill the experience buffer)
         """
         self.run(n_warmup)
+        i = 0
         for _ in range(n_iter):
+            i += 1
             self.run(n_sim_steps)
             for _ in range(n_train_steps):
                 for agent in self.agents.agents:
-                    #print(repr(agent))
                     agent.update()
+            if optimize_for_parallel:    
+                # update prio buffer, just working for self_play and with modiefied agent
+                # batches prio buffer updates in order to avoid Idletime on CPU/GPu
+                if i % 40 == 0:
+                    start = time.time()
+                    self.agents.agents[0].update_prio()
+                    self.prio_time += (time.time() -start)
+                if i % 40 == 0:
+                    print('prio external took', self.prio_time, self.agents.agents[0].train_step)
                     
     def preprocess_obs_for_agent(self, obs, agent, stack):
         

@@ -34,7 +34,7 @@ def session(
             self_play: bool = True,
             agent_config_path=None,
             output_dir = "./output",
-            hanabi_game_type="Hanabi-Small",
+            hanabi_game_type="Hanabi-Full",
             n_players: int = 2,
             max_life_tokens: int = None,
             n_parallel: int = 256,
@@ -87,7 +87,7 @@ def session(
 
     # load data that is being passed from multiprocess-processes from one to another
     input_dict = input_.get()
-    os.environ["CUDA_VISIBLE_DEVICES"] = input_dict['gpu']
+    os.environ["CUDA_VISIBLE_DEVICES"] = input_dict['1']
     epoch_circle = input_dict['epoch_circle']
     agent_data = input_dict['agent_data']
     num_gpus = input_dict['num_gpus']
@@ -163,7 +163,8 @@ def session(
         n_iter=eval_freq,
         n_sim_steps=n_sim_steps,
         n_train_steps=n_train_steps,
-        n_warmup=int(256 * 5 * n_players / n_sim_steps))
+        n_warmup=int(256 * 5 * n_players / n_sim_steps),
+        optimize_for_parallel = True)
 
     print("step", 1 * eval_freq * n_train_steps)
     # eval
@@ -183,7 +184,8 @@ def session(
             n_iter=eval_freq,
             n_sim_steps=n_sim_steps,
             n_train_steps=n_train_steps,
-            n_warmup=0)
+            n_warmup=0,
+            optimize_for_parallel= True)
         print("step", (epoch_circle * pbt_epochs + (epoch + 2)) * eval_freq * n_train_steps)
         
         # eval after train-step
