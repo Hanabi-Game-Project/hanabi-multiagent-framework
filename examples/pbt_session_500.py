@@ -42,7 +42,7 @@ def session(
             n_train_steps: int = 4,
             n_sim_steps: int = 2,
             epochs: int = 3500,
-            eval_freq: int = 500,
+            eval_freq: int = 1000,
     ):
 
     def load_agent(env, agent_data, num_gpus):
@@ -483,11 +483,11 @@ def main(args):
     for gens in range(pbt_params.generations):
         agent_data, epoch_circle, mean_rewards = training_run(agent_data, epoch_circle, args.restore_weights, args.num_gpus, args.which_gpu, args.hanabi_game_type)
         print('pbt_counter after training {}'.format(pbt_counter))
-        time.sleep(5)
+        # time.sleep(5)
         agent_data = keeper.evaluation_run(agent_data, 
                     mean_rewards)
         print('pbt_counter before training {}'.format(pbt_counter))
-        time.sleep(5)
+        # time.sleep(5)
 
 
             
