@@ -87,7 +87,7 @@ def session(
 
     # load data that is being passed from multiprocess-processes from one to another
     input_dict = input_.get()
-    os.environ["CUDA_VISIBLE_DEVICES"] = input_dict['1']
+    os.environ["CUDA_VISIBLE_DEVICES"] = input_dict['gpu']
     epoch_circle = input_dict['epoch_circle']
     agent_data = input_dict['agent_data']
     num_gpus = input_dict['num_gpus']
@@ -219,7 +219,8 @@ def session(
 def training_run(agent_data = [], 
                 epoch_circle = None,
                 restore_weights = None,
-                num_gpus = 1):
+                num_gpus = 1,
+                which_gpu = 0):
     '''Function that administers the use of Multiprocessing Sub-Processes for training'''
     print('IN TRAINING', args.agent_config_path)
     input_ = Queue()
@@ -230,7 +231,7 @@ def training_run(agent_data = [],
     for i in range(args.num_gpus):
         input_data = {'agent_data' : agent_data[i], 
                     'epoch_circle' : epoch_circle,
-                    'gpu' : str(i),
+                    'gpu' : str(which_gpu),
                     'restore_weights' : restore_weights,
                     'num_gpus' : num_gpus
                     }
@@ -478,7 +479,7 @@ def main(args):
     # run PBT-algorithm in generations
     epoch_circle = 0
     for gens in range(pbt_params.generations):
-        agent_data, epoch_circle, mean_rewards = training_run(agent_data, epoch_circle, args.restore_weights, args.num_gpus)
+        agent_data, epoch_circle, mean_rewards = training_run(agent_data, epoch_circle, args.restore_weights, args.num_gpus, args.which_gpu)
         print('pbt_counter after training {}'.format(pbt_counter))
         time.sleep(5)
         agent_data = keeper.evaluation_run(agent_data, 
@@ -517,6 +518,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_gpus", type=int, default=1,
         help="Define the Machine to run on by installed GPUs"
+    )
+    parser.add_argument(
+        "--which_gpu", type=int, default=0,
+        help="Define the GPU if more than 1 availabel"
     )
 
 
