@@ -220,7 +220,8 @@ def training_run(agent_data = [],
                 epoch_circle = None,
                 restore_weights = None,
                 num_gpus = 1,
-                which_gpu = 0):
+                which_gpu = 0,
+                hanabi_game_type = 'Hanabi-Small'):
     '''Function that administers the use of Multiprocessing Sub-Processes for training'''
     print('IN TRAINING', args.agent_config_path)
     input_ = Queue()
@@ -243,7 +244,8 @@ def training_run(agent_data = [],
                                         output, 
                                         args.self_play, 
                                         args.agent_config_path, 
-                                        output_dir))
+                                        output_dir,
+                                        hanabi_game_type = hanabi_game_type))
         processes.append(p)
         p.start()
     
@@ -479,7 +481,7 @@ def main(args):
     # run PBT-algorithm in generations
     epoch_circle = 0
     for gens in range(pbt_params.generations):
-        agent_data, epoch_circle, mean_rewards = training_run(agent_data, epoch_circle, args.restore_weights, args.num_gpus, args.which_gpu)
+        agent_data, epoch_circle, mean_rewards = training_run(agent_data, epoch_circle, args.restore_weights, args.num_gpus, args.which_gpu, args.hanabi_game_type)
         print('pbt_counter after training {}'.format(pbt_counter))
         time.sleep(5)
         agent_data = keeper.evaluation_run(agent_data, 
@@ -521,7 +523,11 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--which_gpu", type=int, default=0,
-        help="Define the GPU if more than 1 availabel"
+        help="Define the GPU if more than 1 available"
+    )
+    parser.add_argument(
+        "--which_hanabi", type=str, default='Hanabi-Small',
+        help="Define the Hanabi Game to be played"
     )
 
 

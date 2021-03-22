@@ -1,6 +1,6 @@
 # defining the session
-session.n_parallel                               = 1280
-session.n_parallel_eval                          = 5120
+session.n_parallel                               = 1920
+session.n_parallel_eval                          = 6400
 session.epochs                                   = 25
 
 # define schedule for annealing of beta_is
