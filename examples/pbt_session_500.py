@@ -526,7 +526,7 @@ if __name__ == "__main__":
         help="Define the GPU if more than 1 available"
     )
     parser.add_argument(
-        "--which_hanabi", type=str, default='Hanabi-Small',
+        "--hanabi_game_type", type=str, default='Hanabi-Small',
         help="Define the Hanabi Game to be played"
     )
 
