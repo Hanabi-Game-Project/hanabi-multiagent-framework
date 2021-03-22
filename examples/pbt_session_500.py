@@ -245,7 +245,7 @@ def training_run(agent_data = [],
                                         args.self_play, 
                                         args.agent_config_path, 
                                         output_dir,
-                                        hanabi_game_type = hanabi_game_type))
+                                        hanabi_game_type))
         processes.append(p)
         p.start()
     
