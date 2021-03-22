@@ -11,10 +11,11 @@ from .agent import HanabiAgent
 from .environment import HanabiParallelEnvironment
 from .experience_buffer import ExperienceBuffer
 from .utils import eval_pretty_print
-from hanabi_agents.rlax_dqn import RewardShaper, ShapingType
+# from hanabi_agents.rlax_dqn import RewardShaper, ShapingType
 from _cffi_backend import typeof
 import timeit
 from hanabi_learning_environment import pyhanabi_pybind as pyhanabi
+from hanabi_learning_environment.pyhanabi_pybind import RewardShaper, RewardShapingParams
 import time
 
 class HanabiParallelSession:
@@ -22,6 +23,14 @@ class HanabiParallelSession:
     A class for running parallel game sessions
     """
 
+    class ShapingType:
+        NONE = 0
+        RISKY = 1
+        DISCARD_LAST_OF_KIND = 2
+        CONSERVATIVE = 3
+        
+    
+    
     class AgentRingQueue:
         """Class which keeps track of agents' turns"""
 
@@ -72,6 +81,7 @@ class HanabiParallelSession:
         self.last_actions = [None for i in range(self.agents.__len__())]
         self.last_step_types = [np.zeros((self.n_states)) for i in range(self.agents.__len__())]
         self.last_observations = [None for i in  range(self.agents.__len__())]
+
         
         self.reset()
 
@@ -86,11 +96,11 @@ class HanabiParallelSession:
                 stack.reset()
 
     def run_eval(self, 
-                 dest: str = None, 
-                 print_intermediate: bool = True,
-                 store_steps: bool = True,
-                 store_moves: bool = True,
-                 n_chunk: int = 1) -> np.ndarray:
+                dest: str = None, 
+                print_intermediate: bool = True,
+                store_steps: bool = True,
+                store_moves: bool = True,
+                n_chunk: int = 1) -> np.ndarray:
         """Run each state until the end and return the final scores.
         Args:
             print_intermediate -- Flag indicating whether each step of evaluation should be printed.
@@ -149,8 +159,13 @@ class HanabiParallelSession:
                 
             # get shaped rewards
             reward_shaping, shape_type = agent.shape_rewards(obs, moves)
-            risky_moves = shape_type == ShapingType.RISKY
-            bad_discards = shape_type == ShapingType.DISCARD_LAST_OF_KIND
+            # print(f"Inside reward_shaping ----> {type(reward_shaping[0])} and value ---> {reward_shaping[0]}") 
+            # print(f"\n Inside shape_type ---> {type(shape_type[0])} and value ---> {shape_type[0]}")
+
+            # print(f"shaping Type -- Risky -----> {self.shapetype.RISKY}")
+
+            risky_moves = shape_type == self.ShapingType.RISKY
+            bad_discards = shape_type == self.ShapingType.DISCARD_LAST_OF_KIND
 
             # determine metrics of observation before applying the moves
             # determine playability, per game and per step
@@ -245,7 +260,7 @@ class HanabiParallelSession:
         # store the average reward as performance parameter in reward shaping
         for agent in self.agents.agents:
             if agent.reward_shaper is not None:
-                agent.reward_shaper.performance = np.mean(total_reward)  
+                agent.reward_shaper.performance(np.mean(total_reward))  
         
         return total_reward
 

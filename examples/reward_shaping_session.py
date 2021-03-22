@@ -4,9 +4,10 @@ import gin
 import hanabi_multiagent_framework as hmf
 from hanabi_multiagent_framework.utils import make_hanabi_env_config
 from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams, AgentType
-from hanabi_agents.rlax_dqn import RewardShapingParams, RewardShaper
+# from hanabi_agents.rlax_dqn import RewardShapingParams, RewardShaper
 from hanabi_agents.rule_based import RulebasedParams, RulebasedAgent
 from hanabi_agents.rule_based.predefined_rules import piers_rules, piers_rules_adjusted
+from hanabi_learning_environment.pyhanabi_pybind import RewardShapingParams, RewardShaper
 import logging
 import time
 
@@ -14,11 +15,13 @@ import time
 def load_agent(env):
     
     # load reward shaping infos
-    reward_shaping_params = RewardShapingParams()
-    if reward_shaping_params.shaper:
-        reward_shaper = RewardShaper(reward_shaping_params)
-    else:
-        reward_shaper = None
+    # reward_shaping_params = RewardShapingParams()
+    # if reward_shaping_params.shaper:
+    params = RewardShapingParams()
+    reward_shaper = RewardShaper(params = params)
+
+    # else:
+        # reward_shaper = None
     
     # load agent based on type
     agent_type = AgentType()
@@ -49,7 +52,7 @@ def session(
             epoch_offset = 0,
             eval_freq: int = 500,
             self_play: bool = True,
-            output_dir = "/output",
+            output_dir = "./output",
             start_with_weights=None,
             n_backup = 500, 
             restore_weights = None
@@ -136,10 +139,10 @@ def session(
     for epoch in range(epoch_offset, epochs + epoch_offset):
         
         # train
-        parallel_session.train(n_iter=eval_freq,
-                               n_sim_steps=n_sim_steps,
-                               n_train_steps=n_train_steps,
-                               n_warmup=n_warmup)
+        parallel_session.train( n_iter=eval_freq,
+                                n_sim_steps=n_sim_steps,
+                                n_train_steps=n_train_steps,
+                                n_warmup=n_warmup)
         
         # no warmup after epoch 0
         n_warmup = 0

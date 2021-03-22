@@ -25,7 +25,7 @@ Glossary:
 import abc
 from typing import Tuple, Union, List
 from numpy import ndarray
-from hanabi_learning_environment.pyhanabi_pybind import HanabiMove, HanabiObservation
+from hanabi_learning_environment.pyhanabi_pybind import HanabiMove, HanabiObservation, RewardShaper, RewardShapingParams, ShapingType
 from .observation_stacker import ObservationStacker
 
 class HanabiAgent(abc.ABC):
