@@ -11,26 +11,14 @@ from .agent import HanabiAgent
 from .environment import HanabiParallelEnvironment
 from .experience_buffer import ExperienceBuffer
 from .utils import eval_pretty_print
-# from hanabi_agents.rlax_dqn import RewardShaper, ShapingType
-from _cffi_backend import typeof
-import timeit
 from hanabi_learning_environment import pyhanabi_pybind as pyhanabi
 from hanabi_learning_environment.pyhanabi_pybind import RewardShaper, RewardShapingParams
-import time
 
 class HanabiParallelSession:
     """
     A class for running parallel game sessions
     """
 
-    class ShapingType:
-        NONE = 0
-        RISKY = 1
-        DISCARD_LAST_OF_KIND = 2
-        CONSERVATIVE = 3
-        
-    
-    
     class AgentRingQueue:
         """Class which keeps track of agents' turns"""
 
@@ -82,7 +70,6 @@ class HanabiParallelSession:
         self.last_step_types = [np.zeros((self.n_states)) for i in range(self.agents.__len__())]
         self.last_observations = [None for i in  range(self.agents.__len__())]
 
-        
         self.reset()
 
     def reset(self):
@@ -159,14 +146,10 @@ class HanabiParallelSession:
                 
             # get shaped rewards
             reward_shaping, shape_type = agent.shape_rewards(obs, moves)
-            # print(f"Inside reward_shaping ----> {type(reward_shaping[0])} and value ---> {reward_shaping[0]}") 
-            # print(f"\n Inside shape_type ---> {type(shape_type[0])} and value ---> {shape_type[0]}")
 
-            # print(f"shaping Type -- Risky -----> {self.shapetype.RISKY}")
-
-            risky_moves = shape_type == self.ShapingType.RISKY
-            bad_discards = shape_type == self.ShapingType.DISCARD_LAST_OF_KIND
-
+            risky_moves = shape_type == RewardShaper.Type.kRisky
+            bad_discards = shape_type == RewardShaper.Type.kDiscardLastOfKind
+            
             # determine metrics of observation before applying the moves
             # determine playability, per game and per step
             counter = 0
@@ -236,6 +219,7 @@ class HanabiParallelSession:
             step += 1
 
         if print_intermediate:
+            print('bad discards', np.sum(total_bad_discards) / np.sum(total_discard_moves) * 100)
             eval_pretty_print(step_rewards, total_reward)
             
         # store statistics in files

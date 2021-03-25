@@ -4,24 +4,46 @@ import gin
 import hanabi_multiagent_framework as hmf
 from hanabi_multiagent_framework.utils import make_hanabi_env_config
 from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams, AgentType
-# from hanabi_agents.rlax_dqn import RewardShapingParams, RewardShaper
-from hanabi_agents.rule_based import RulebasedParams, RulebasedAgent
-from hanabi_agents.rule_based.predefined_rules import piers_rules, piers_rules_adjusted
-from hanabi_learning_environment.pyhanabi_pybind import RewardShapingParams, RewardShaper
+from hanabi_learning_environment.pyhanabi_pybind import RewardShapingParams as ShapingParams
+from hanabi_learning_environment.pyhanabi_pybind import RewardShaper
 import logging
 import time
 
+@gin.configurable
+def RewardShapingParams(
+        shaper: bool = True,
+        min_play_probability: float = 0.8,
+        w_play_penalty: float = 0,
+        m_play_penalty: float = 0,
+        w_play_reward: float = 0,
+        m_play_reward: float = 0,
+        penalty_last_of_kind: float = 0
+    ):
+    
+    if shaper:
+    
+        return ShapingParams(
+            shaper, 
+            min_play_probability,
+            w_play_penalty,
+            m_play_penalty,
+            w_play_reward,
+            m_play_reward,
+            penalty_last_of_kind
+        )
+        
+    else:
+        return None
+    
 
 def load_agent(env):
     
     # load reward shaping infos
-    # reward_shaping_params = RewardShapingParams()
-    # if reward_shaping_params.shaper:
     params = RewardShapingParams()
-    reward_shaper = RewardShaper(params = params)
-
-    # else:
-        # reward_shaper = None
+    if params is not None:
+        reward_shaper = RewardShaper(params = params)
+    else:
+        reward_shaper = None
     
     # load agent based on type
     agent_type = AgentType()
@@ -156,7 +178,8 @@ def session(
         # evaluate
         mean_reward = parallel_eval_session.run_eval(
             dest=os.path.join(output_dir, "stats", str(epoch)),
-            store_moves=False
+            store_moves=True,
+            store_steps = True
             ).mean()
 
         # compare to previous iteration and store checkpoints
