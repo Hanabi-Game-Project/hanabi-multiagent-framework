@@ -388,7 +388,7 @@ class Book_keeper():
         # sample new parameter sets given globally best sets so far
         new_parameters = []
         if index_global_best:  
-            for i in range(int(len(index_best_scoring)*2.5)):
+            for i in range(int(len(index_best_scoring)*1.5)):
                 while len(new_parameters) < self.pbt_params.population_size:
                     _set = self.make_set(parameters, random.choice(index_global_best))
                     known_set = True
@@ -401,7 +401,7 @@ class Book_keeper():
                         new_parameters.append(new_set)
         print('len new parameters>>>>>>>>>>', new_parameters)
         # try to change some of the previous best sets
-        for i in range(1):
+        for i in range(3):
             while len(new_parameters) < self.pbt_params.population_size:
                 _set = random.choice(self.best_sets)
                 known_set = True
