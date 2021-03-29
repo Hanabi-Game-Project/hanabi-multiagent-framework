@@ -127,12 +127,12 @@ def session(
         
     #sample params
     
-    if epoch_circle == 0:
-        agent_data = {'buffersize': [], 'lr': [], 'alpha': []}
-        for i in range(population_params.population_size):
-            agent_data['buffersize'].append(sample_buffersize(population_params, agent_params))
-            agent_data['lr'].append(sample_init_lr(population_params))
-            agent_data['alpha'].append(sample_init_alpha(population_params))
+    # if epoch_circle == 0:
+    #     agent_data = {'buffersize': [], 'lr': [], 'alpha': []}
+    #     for i in range(population_params.population_size):
+    #         agent_data['buffersize'].append(sample_buffersize(population_params, agent_params))
+    #         agent_data['lr'].append(sample_init_lr(population_params))
+    #         agent_data['alpha'].append(sample_init_alpha(population_params))
 
 
 
@@ -479,6 +479,7 @@ def main(args):
 
     keeper = Book_keeper(pbt_params, agent_params)
 
+    agent_data = [{'buffersize': [262144, 131072, 131072, 131072,262144], 'lr': [0.000061, 0.000061, 0.000058, 0.000061, 0.000058], 'alpha': [0.644689, 0.746308, 0.746308, 0.783623, 0.822804]}]
     # run PBT-algorithm in generations
     epoch_circle = 0
     for gens in range(pbt_params.generations):
