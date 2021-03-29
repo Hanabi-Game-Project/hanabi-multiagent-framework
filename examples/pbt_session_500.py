@@ -401,7 +401,7 @@ class Book_keeper():
                         new_parameters.append(new_set)
         print('len new parameters>>>>>>>>>>', new_parameters)
         # try to change some of the previous best sets
-        for i in range(3):
+        for i in range(2):
             while len(new_parameters) < self.pbt_params.population_size:
                 _set = random.choice(self.best_sets)
                 known_set = True
@@ -410,6 +410,7 @@ class Book_keeper():
                     j+=1
                     new_set = self.sample_new_params(_set)
                     known_set = False
+                    
                     for prev_set in self.explored_sets:
                         if new_set == prev_set:
                             known_set = True
