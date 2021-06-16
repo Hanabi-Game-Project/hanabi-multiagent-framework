@@ -120,7 +120,14 @@ class HanabiParallelSession:
             obs = self.preprocess_obs_for_agent(self._cur_obs, agent, self.stacker_eval[agent_id])
             actions = agent.exploit(obs)
 
-            moves = self.parallel_env.get_moves(actions)
+            if agent.requires_vectorized_observation():
+                # print('here', type(actions), actions)
+
+                moves = self.parallel_env.get_moves(actions)
+            else:
+                print('no else')
+                moves = actions
+            #moves = self.parallel_env.get_moves(actions)
             # get shaped rewards
             reward_shaping, shape_type = agent.shape_rewards(obs, moves)
             
@@ -299,8 +306,8 @@ class HanabiParallelSession:
                     start = time.time()
                     self.agents.agents[0].update_prio()
                     self.prio_time += (time.time() -start)
-                if i % 40 == 0:
-                    print('prio external took', self.prio_time, self.agents.agents[0].train_step)
+                # if i % 40 == 0:
+                    # print('prio external took', self.prio_time, self.agents.agents[0].train_step)
                     
     def preprocess_obs_for_agent(self, obs, agent, stack):
         

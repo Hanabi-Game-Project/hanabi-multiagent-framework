@@ -12,7 +12,6 @@ import hanabi_multiagent_framework as hmf
 from hanabi_multiagent_framework.utils import make_hanabi_env_config
 from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams, PBTParams, DQNParallel
 from hanabi_agents.rlax_dqn import RewardShapingParams
-from hanabi_agents.pbt import AgentDQNPopulation
 from hanabi_multiagent_framework.utils import eval_pretty_print
 
 
@@ -72,7 +71,7 @@ def session(
             reward_shaping_params = RewardShapingParams()
             pbt_params = PBTParams()
 
-        return DQNParallel(
+        return DQNAgent(
                         env.observation_spec_vec_batch()[0],
                         env.action_spec_vec(),
                         [sample_buffersize(population_params, agent_params) for n in range(pbt_params.population_size)],
@@ -471,8 +470,8 @@ def session(
             split_evaluation(reward_pbt_test, population_size, mean_reward_prev)
 
             
-         
-        save_intermediate(os.path.join(output_dir, 'restore'), agents[0], epoch_, epochs_alive, mean_reward_max, agent_params, keep_records = False)   
+        if epoch_ % 100 == 0 and epoch_>0:
+            save_intermediate(os.path.join(output_dir, 'restore'), agents[0], epoch_, epochs_alive, mean_reward_max, agent_params, keep_records = False)   
         epoch_ += 1
             # 3. perform PBT
             # 3a. weights overwriting -- done
@@ -542,9 +541,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # for use on local machine to not overload GPU-memory given jax default setting to occupy 90% of total GPU-Memory
-    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.6"
+    # os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.6"
     # setting only necessary for NI server where cuda is installed via conda-env
-    os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir=/mnt/antares_raid/home/maltes/miniconda/envs/RL"
+    # os.environ["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir=/mnt/antares_raid/home/maltes/miniconda/envs/RL"
 
  
     session(**vars(args))     

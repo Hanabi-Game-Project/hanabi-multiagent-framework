@@ -3,10 +3,13 @@ import numpy as np
 import gin
 import hanabi_multiagent_framework as hmf
 from hanabi_multiagent_framework.utils import make_hanabi_env_config
-from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams
+from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams, DQNParallel
 from hanabi_agents.rlax_dqn import RewardShapingParams, RewardShaper
 import logging
 import time
+
+# for use on local machine to not overload GPU-memory given jax default setting to occupy 90% of total GPU-Memory
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = "0.6"
 
 
 def load_agent(env):
@@ -16,7 +19,7 @@ def load_agent(env):
     
     agent_params = RlaxRainbowParams()
     print(agent_params)
-    return DQNAgent(env.observation_spec_vec_batch()[0],
+    return DQNParallel(env.observation_spec_vec_batch()[0],
                     env.action_spec_vec(),
                     agent_params,
                     reward_shaper)
@@ -28,8 +31,8 @@ def session(
             hanabi_game_type="Hanabi-Small",
             n_players: int = 2,
             max_life_tokens: int = None,
-            n_parallel: int = 32,
-            n_parallel_eval:int = 1_000,
+            n_parallel: int = 128,
+            n_parallel_eval:int = 2048,
             n_train_steps: int = 4,
             n_sim_steps: int = 2,
             epochs: int = 1_000_000,
@@ -196,7 +199,7 @@ if __name__ == "__main__":
 # #         "--n_parallel", type=int, default=32,
 # #         help="Number of games run in parallel during training.")
     parser.add_argument(
-        "--self_play", default=False, action='store_true',
+        "--self_play", default=True, action='store_true',
         help="Whether the agent should play with itself, or an independent agent instance should be created for each player.")
 #     parser.add_argument(
 #         "--n_train_steps", type=int, default=4,
