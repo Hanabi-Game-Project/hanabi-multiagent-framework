@@ -479,7 +479,7 @@ def main(args):
 
     keeper = Book_keeper(pbt_params, agent_params)
 
-    agent_data = [{'buffersize': [262144, 131072, 131072, 131072,262144], 'lr': [0.000061, 0.000061, 0.000058, 0.000061, 0.000058], 'alpha': [0.644689, 0.746308, 0.746308, 0.783623, 0.822804]}]
+    # agent_data = [{'buffersize': [262144, 131072, 131072, 131072,262144], 'lr': [0.000061, 0.000061, 0.000058, 0.000061, 0.000058], 'alpha': [0.644689, 0.746308, 0.746308, 0.783623, 0.822804]}]
     # run PBT-algorithm in generations
     epoch_circle = 0
     for gens in range(pbt_params.generations):
