@@ -5,11 +5,12 @@ import hanabi_multiagent_framework as hmf
 from hanabi_multiagent_framework.utils import make_hanabi_env_config
 from hanabi_agents.rlax_dqn import DQNAgent, RlaxRainbowParams, AgentType
 from hanabi_agents.rlax_dqn import RewardShapingParams, RewardShaper
-from hanabi_agents.rule_based import RulebasedParams, RulebasedAgent
-from hanabi_agents.rule_based.predefined_rules import piers_rules, piers_rules_adjusted
+#from hanabi_agents.rule_based import RulebasedParams, RulebasedAgent
+#from hanabi_agents.rule_based.predefined_rules import piers_rules, piers_rules_adjusted
 import logging
 import time
 
+from pympler.tracker import SummaryTracker
 
 def load_agent(env):
     
@@ -38,7 +39,7 @@ def load_agent(env):
 @gin.configurable(blacklist=['output_dir', 'self_play'])
 def session(
             #agent_config_path=None,
-            hanabi_game_type="Hanabi-Small",
+            hanabi_game_type="Hanabi-Full",
             n_players: int = 2,
             max_life_tokens: int = None,
             n_parallel: int = 32,
@@ -56,6 +57,7 @@ def session(
     ):
     
     print(epochs, n_parallel, n_parallel_eval)
+    #tracker = SummaryTracker()
     
     # create folder structure
     os.makedirs(os.path.join(output_dir, "weights"))
@@ -131,9 +133,17 @@ def session(
 
     # start time
     start_time = time.time()
+
+    # activate store_td
+    for a in agents:
+      if epoch_offset < 50:
+        a.store_td=True
+      else:
+        a.store_td=False
+    print('store TD', agents[0].store_td)
     
     # start training
-    for epoch in range(epoch_offset, epochs + epoch_offset):
+    for epoch in range(epoch_offset+4, epochs + epoch_offset, 5):
         
         # train
         parallel_session.train(n_iter=eval_freq,
@@ -145,10 +155,11 @@ def session(
         n_warmup = 0
         
         # print number of train steps
-        if self_play:
-            print("step", (epoch + 1) * eval_freq * n_train_steps * n_players)
-        else:
-            print("step", (epoch + 1) * eval_freq * n_train_steps)
+        print("step", agents[0].train_step)
+        #if self_play:
+        #    print("step", (epoch + 1) * eval_freq * n_train_steps * n_players)
+        #else:
+        #    print("step", (epoch + 1) * eval_freq * n_train_steps)
         
         # evaluate
         output_path = os.path.join(output_dir, "stats", str(epoch))
@@ -160,6 +171,9 @@ def session(
             
         stochasticity = agents[0].get_stochasticity()
         np.save(output_path + "_stochasticity.npy", stochasticity)
+
+        #drawn_td = agents[0].get_drawn_tds(deactivate=False)
+        #np.save(output_path + "_drawn_tds.npy", drawn_td)
         
         if (epoch +1) % 50 == 0:
             buffer_td = agents[0].get_buffer_tds()
@@ -176,17 +190,20 @@ def session(
         if (epoch + 1) % n_backup == 0:
             
             print('save weights', epoch)
+            only_weights = False#True if (epoch + 1) < epochs + epoch_offset else False
             
             if self_play:
                 agents[0].save_weights(
                     os.path.join(output_dir, "weights", "agent_0"), 
-                    "ckpt_" + str(agents[0].train_step))
+                    "ckpt_" + str(agents[0].train_step),
+                    only_weights=only_weights)
                 
             else:
                 for aid, agent in enumerate(agents):
                     agent.save_weights(
                         os.path.join(output_dir, "weights", "agent_" + str(aid)), 
-                        "ckpt_" + str(agents[0].train_step))
+                        "ckpt_" + str(agent.train_step),
+                        only_weights=only_weights)
                     
         # store the best network
         if mean_reward_prev < mean_reward:
@@ -205,6 +222,8 @@ def session(
         # logging
         logger.info("epoch {}: duration={}s    reward={}".format(epoch, time.time()-start_time, mean_reward))
         start_time = time.time()
+
+        #tracker.print_diff()
         
         
 def linear_schedule(val_start, val_end, n_steps):
@@ -215,6 +234,14 @@ def linear_schedule(val_start, val_end, n_steps):
             return min(val_end, val_start + step * increase)
         else:
             return max(val_end, val_start + step * increase)
+    
+    return schedule
+
+
+def exponential_schedule(val_start, val_end, decrease):
+    
+    def schedule(step):
+        return max(val_start * (decrease**step), val_end)
     
     return schedule
 
@@ -231,6 +258,13 @@ def ramp_schedule(val_start, val_end, n_steps):
 def schedule_beta_is(value_start, value_end, steps):
     return linear_schedule(value_start, value_end, steps)
 
+@gin.configurable
+def schedule_epsilon(value_start=1, value_end=0, steps=50*2000):
+    return linear_schedule(value_start, value_end, steps)
+
+@gin.configurable
+def schedule_tau(value_start=1, value_end=0.0001, decrease=0.99995):
+    return exponential_schedule(value_start, value_end, decrease)
         
 def main(args):
     
